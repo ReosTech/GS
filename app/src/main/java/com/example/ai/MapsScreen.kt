@@ -584,7 +584,10 @@ fun MapsScreen(
                 modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
                   WebView(ctx).apply {
-                    setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+                    setLayerType(View.LAYER_TYPE_NONE, null)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                      setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
+                    }
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     settings.loadWithOverviewMode = true

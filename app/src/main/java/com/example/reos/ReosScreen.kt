@@ -84,6 +84,7 @@ fun ReosScreen(
   var pageStartTime by remember { mutableLongStateOf(0L) }
   var webViewRef by remember { mutableStateOf<WebView?>(null) }
   var webViewInstanceKey by remember { mutableIntStateOf(0) }
+  var renderCrashCount by remember { mutableIntStateOf(0) }
 
   // File upload chooser handler
   var filePathCallback by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
@@ -148,8 +149,8 @@ fun ReosScreen(
               ViewGroup.LayoutParams.MATCH_PARENT,
               ViewGroup.LayoutParams.MATCH_PARENT
             )
-            // Use software rendering to prevent Mesa GPU driver and missing rendernode crashes in emulator
-            setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+            // Standard hardware layer; avoid forcing LAYER_TYPE_SOFTWARE which breaks Mesa DRI and sandboxed Chromium
+            setLayerType(View.LAYER_TYPE_NONE, null)
             webViewRef = this
             setupWebSettings(this, isDesktopMode)
             webViewClient = object : WebViewClient() {
@@ -184,6 +185,7 @@ fun ReosScreen(
               override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 isLoading = false
+                renderCrashCount = 0
                 canGoBack = view?.canGoBack() == true
                 canGoForward = view?.canGoForward() == true
                 view?.title?.let { pageTitle = it }
@@ -274,9 +276,14 @@ fun ReosScreen(
                   }
                 } catch (_: Exception) {}
                 webViewRef = null
-                isLoading = false
-                isWebError = true
-                errorMessage = "Renderer process recovered safely. Tap Retry to reload."
+                if (renderCrashCount < 2) {
+                  renderCrashCount++
+                  webViewInstanceKey++
+                } else {
+                  isLoading = false
+                  isWebError = true
+                  errorMessage = "Display renderer restarted. Tap Retry to reload."
+                }
                 return true
               }
             }
@@ -328,7 +335,11 @@ fun ReosScreen(
         },
         update = { view ->
           webViewRef = view
-          setupWebSettings(view, isDesktopMode)
+          val targetUserAgent = if (isDesktopMode) DESKTOP_USER_AGENT else null
+          if (view.settings.userAgentString != targetUserAgent) {
+            view.settings.userAgentString = targetUserAgent
+            view.reload()
+          }
         }
       )
     }
@@ -741,9 +752,11 @@ fun ReosScreen(
 
 @SuppressLint("SetJavaScriptEnabled")
 fun setupWebSettings(webView: WebView, isDesktop: Boolean) {
-  webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+  webView.setLayerType(View.LAYER_TYPE_NONE, null)
+  if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+    webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
+  }
   val prefs = webView.context.getSharedPreferences("reos_prefs", Context.MODE_PRIVATE)
-  val isExperiencePlus = prefs.getBoolean("addon_experience_plus", true)
   webView.settings.apply {
     javaScriptEnabled = true
     domStorageEnabled = true
