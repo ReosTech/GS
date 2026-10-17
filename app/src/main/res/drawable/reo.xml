@@ -1,0 +1,24 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="66dp"
+    android:height="66dp"
+    android:viewportWidth="66"
+    android:viewportHeight="66">
+    <!-- Stylized Modern Reos Tech 'R' Monogram & Signal Pulse -->
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M16,12 L36,12 C44,12 50,17 50,25 C50,31 46,36 40,37 L52,54 L40,54 L30,38 L24,38 L24,54 L16,54 Z" />
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M24,20 L35,20 C39.5,20 42.5,22.5 42.5,25.5 C42.5,28.5 39.5,31 35,31 L24,31 Z" />
+    <!-- Signal arcs -->
+    <path
+        android:strokeColor="#60A5FA"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M52,18 C56,22 56,28 52,32" />
+    <path
+        android:strokeColor="#93C5FD"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M57,14 C63,20 63,30 57,36" />
+</vector>

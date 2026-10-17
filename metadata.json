@@ -1,0 +1,6 @@
+{
+  "name": "Reos app",
+  "description": "Android web app wrapper for reostech.pagekite.me with native navigation, offline handling, and rich web controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

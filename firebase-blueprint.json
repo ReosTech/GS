@@ -1,0 +1,14 @@
+{
+  "entities": {
+    "UserProfile": {
+      "collection": "users",
+      "fields": {
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" },
+        "settings": { "type": "map" }
+      }
+    }
+  }
+}
