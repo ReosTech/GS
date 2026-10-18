@@ -496,7 +496,7 @@ fun AddonsScreen(
                   | Wind Gusts | 14 km/h | Mild |
                   | Precipitation | 5% | Clear |
                   
-                  Visit [Reos Portal](https://t.ly/reostech) for live radar telemetry.
+                  Visit [Reos Portal](https://t.ly/Zalxp) for live radar telemetry.
                 """.trimIndent()
                 showMarkdownPreview = true
               },
@@ -824,6 +824,47 @@ fun AddonsScreen(
                   Text("Sign In with Google", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
               }
+            }
+          }
+
+          Button(
+            onClick = {
+              coroutineScope.launch {
+                isSyncingFirestore = true
+                val settingsMap = mapOf(
+                  "moreConnected" to moreConnectedEnabled,
+                  "experiencePlus" to experiencePlusEnabled,
+                  "emailAccess" to emailAccessEnabled,
+                  "weatherSms" to weatherSmsBroadcastEnabled,
+                  "stormAlerts" to stormAlertsEnabled,
+                  "offlineCache" to offlineCacheEnabled,
+                  "highContrast" to highContrastEnabled,
+                  "defaultUrl" to "https://reostech.pagekite.me",
+                  "reosTabUrl" to "https://t.ly/Zalxp",
+                  "fallbackUrl" to "https://reostech.pagekite.me",
+                  "userEmail" to (currentUser?.email ?: FirebaseManager.DEFAULT_USER_EMAIL)
+                )
+                val syncResult = FirebaseManager.syncEverything(context, settingsMap)
+                syncResult.onSuccess {
+                  Toast.makeText(context, "Everything synced to cloud & local storage!", Toast.LENGTH_SHORT).show()
+                }.onFailure { err ->
+                  Toast.makeText(context, "Sync note: ${err.message}", Toast.LENGTH_LONG).show()
+                }
+                isSyncingFirestore = false
+              }
+            },
+            enabled = !isSyncingFirestore,
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth().testTag("sync_everything_button")
+          ) {
+            if (isSyncingFirestore) {
+              CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+              Spacer(Modifier.width(8.dp))
+              Text("Syncing Everything...", fontSize = 13.sp)
+            } else {
+              Icon(Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(18.dp))
+              Spacer(Modifier.width(8.dp))
+              Text("Sync Everything to Cloud", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
           }
 

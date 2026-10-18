@@ -211,7 +211,10 @@ fun MapsScreen(
         context = context,
         prompt = prompt,
         model = "gemini-3.8-flash",
-        systemInstruction = "You are an expert geospatial explorer, city planner, and urban travel advisor."
+        systemInstruction = "You are an expert geospatial explorer, city planner, and urban travel advisor. Ground all answers using live Google Maps and Google Search data.",
+        useSearchGrounding = true,
+        useMapsGrounding = true,
+        locationContext = Pair(loc.latitude, loc.longitude)
       )
 
       result.onSuccess { text ->
@@ -732,12 +735,20 @@ fun MapsScreen(
               tint = MaterialTheme.colorScheme.secondary,
               modifier = Modifier.size(20.dp)
             )
-            Text(
-              text = "AI Geospatial Guide",
-              fontWeight = FontWeight.Bold,
-              fontSize = 15.sp,
-              color = MaterialTheme.colorScheme.onSecondaryContainer
-            )
+            Column {
+              Text(
+                text = "AI Geospatial Guide",
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+              )
+              Text(
+                text = "🗺️ Google Maps & Search Grounded (gemini-3.8-flash)",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.secondary
+              )
+            }
           }
 
           FilledTonalButton(

@@ -64,13 +64,16 @@ object AiService {
     }
   }
 
-  // --- Gemini Text Generation (Chat & Prompts) ---
+  // --- Gemini Text Generation (Chat & Prompts with Search and Maps Grounding) ---
   suspend fun generateContent(
     context: Context,
     prompt: String,
     model: String = "gemini-3.8-flash",
     systemInstruction: String? = null,
-    history: List<Pair<String, String>> = emptyList() // Pair(role, text)
+    history: List<Pair<String, String>> = emptyList(), // Pair(role, text)
+    useSearchGrounding: Boolean = false,
+    useMapsGrounding: Boolean = false,
+    locationContext: Pair<Double, Double>? = null
   ): Result<String> = withContext(Dispatchers.IO) {
     val apiKey = getEffectiveApiKey(context)
     val resolvedModel = resolveModelName(model)
@@ -93,24 +96,57 @@ object AiService {
           contentsArray.put(msgObj)
         }
 
-        // Add current prompt
+        // Add current prompt (enrich with location context if provided for maps grounding)
         val currentMsgObj = JSONObject()
         currentMsgObj.put("role", "user")
         val currentParts = JSONArray()
         val currentPart = JSONObject()
-        currentPart.put("text", prompt)
+        val effectivePrompt = if (locationContext != null && useMapsGrounding) {
+          "$prompt\n\n[Location Context: Latitude ${locationContext.first}, Longitude ${locationContext.second}]"
+        } else {
+          prompt
+        }
+        currentPart.put("text", effectivePrompt)
         currentParts.put(currentPart)
         currentMsgObj.put("parts", currentParts)
         contentsArray.put(currentMsgObj)
 
         rootJson.put("contents", contentsArray)
 
+        // Add tools for Google Search and Google Maps Grounding
+        val toolsArray = JSONArray()
+        if (useSearchGrounding) {
+          val searchTool = JSONObject()
+          searchTool.put("googleSearch", JSONObject())
+          toolsArray.put(searchTool)
+        }
+        if (useMapsGrounding) {
+          val mapsTool = JSONObject()
+          mapsTool.put("googleMaps", JSONObject())
+          toolsArray.put(mapsTool)
+        }
+        if (toolsArray.length() > 0) {
+          rootJson.put("tools", toolsArray)
+        }
+
         // Add system instruction if provided
-        if (!systemInstruction.isNullOrBlank()) {
+        val effectiveSys = buildString {
+          if (!systemInstruction.isNullOrBlank()) {
+            append(systemInstruction)
+          }
+          if (useSearchGrounding) {
+            append(" Ground your answers with up-to-date and accurate information using Google Search.")
+          }
+          if (useMapsGrounding) {
+            append(" Ground your answers with real-world geospatial and location intelligence using Google Maps.")
+          }
+        }.trim()
+
+        if (effectiveSys.isNotBlank()) {
           val sysObj = JSONObject()
           val sysParts = JSONArray()
           val sysPart = JSONObject()
-          sysPart.put("text", systemInstruction)
+          sysPart.put("text", effectiveSys)
           sysParts.put(sysPart)
           sysObj.put("parts", sysParts)
           rootJson.put("systemInstruction", sysObj)
@@ -140,6 +176,53 @@ object AiService {
                   textBuilder.append(part.getString("text"))
                 }
               }
+
+              // Extract and append Grounding metadata (Google Search & Google Maps sources)
+              val groundingMetadata = firstCandidate.optJSONObject("groundingMetadata")
+              if (groundingMetadata != null) {
+                val webSearchQueries = groundingMetadata.optJSONArray("webSearchQueries")
+                val queries = mutableListOf<String>()
+                if (webSearchQueries != null) {
+                  for (qi in 0 until webSearchQueries.length()) {
+                    queries.add(webSearchQueries.optString(qi))
+                  }
+                }
+
+                val groundingChunks = groundingMetadata.optJSONArray("groundingChunks")
+                val citations = mutableListOf<String>()
+                if (groundingChunks != null) {
+                  for (ci in 0 until groundingChunks.length()) {
+                    val chunk = groundingChunks.optJSONObject(ci)
+                    val web = chunk?.optJSONObject("web")
+                    val maps = chunk?.optJSONObject("maps")
+                    if (web != null) {
+                      val title = web.optString("title", "Web Result")
+                      val uri = web.optString("uri", "")
+                      if (uri.isNotBlank()) {
+                        citations.add("🔍 [$title]($uri)")
+                      }
+                    } else if (maps != null) {
+                      val name = maps.optString("name", "Google Maps Location")
+                      val uri = maps.optString("uri", "")
+                      if (uri.isNotBlank()) {
+                        citations.add("📍 [$name]($uri)")
+                      } else {
+                        citations.add("📍 $name")
+                      }
+                    }
+                  }
+                }
+
+                if (citations.isNotEmpty()) {
+                  textBuilder.append("\n\n---\n**Grounded Sources & Citations:**\n")
+                  citations.distinct().take(4).forEach { cite ->
+                    textBuilder.append("- ").append(cite).append("\n")
+                  }
+                } else if (queries.isNotEmpty()) {
+                  textBuilder.append("\n\n*Grounded with real-time Google Search: ${queries.joinToString(", ")}*")
+                }
+              }
+
               if (textBuilder.isNotBlank()) {
                 return@withContext Result.success(textBuilder.toString())
               }
@@ -154,7 +237,13 @@ object AiService {
     }
 
     // Zero-error Intelligent Local AI fallback
-    val localResult = LocalAiEngine.generateResponse(prompt, model, systemInstruction)
+    val localResult = LocalAiEngine.generateResponse(
+      prompt = prompt,
+      model = model,
+      systemInstruction = systemInstruction,
+      useSearchGrounding = useSearchGrounding,
+      useMapsGrounding = useMapsGrounding
+    )
     Result.success(localResult)
   }
 

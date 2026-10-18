@@ -92,6 +92,7 @@ fun MainAppContainer(
       ) { tab ->
         when (tab) {
           MainAppTab.REOS -> ReosScreen(
+            initialUrl = com.example.reos.REOS_TAB_URL,
             onNavigateToWeather = { currentTab = MainAppTab.WEATHER },
             onNavigateToAddons = { currentTab = MainAppTab.ADDONS }
           )

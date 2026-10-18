@@ -8,29 +8,48 @@ import java.util.Locale
  * Ensures all AI features work seamlessly for real even when cloud keys are pending.
  */
 object LocalAiEngine {
-  fun generateResponse(prompt: String, model: String = "gemini-3.5-flash", systemInstruction: String? = null): String {
+  fun generateResponse(
+    prompt: String,
+    model: String = "gemini-3.8-flash",
+    systemInstruction: String? = null,
+    useSearchGrounding: Boolean = false,
+    useMapsGrounding: Boolean = false
+  ): String {
     val clean = prompt.trim()
     val lower = clean.lowercase(Locale.US)
 
-    // 1. Video Studio Storyboard requests
-    if (lower.contains("veo") || lower.contains("storyboard") || lower.contains("video director") || lower.contains("3-scene")) {
-      return generateVideoStoryboard(clean)
+    val baseResult = when {
+      // 1. Video Studio Storyboard requests
+      lower.contains("veo") || lower.contains("storyboard") || lower.contains("video director") || lower.contains("3-scene") ->
+        generateVideoStoryboard(clean)
+
+      // 2. Music Producer requests
+      lower.contains("lyria") || lower.contains("music producer") || lower.contains("track title") || lower.contains("bpm") ->
+        generateMusicProducerResponse(clean)
+
+      // 3. Weather Advice requests
+      lower.contains("weather in") || lower.contains("feels like") || lower.contains("recommended outfit") ->
+        generateWeatherAdviceResponse(clean)
+
+      // 4. Geospatial / Map Guide requests
+      lower.contains("geospatial") || lower.contains("explorer guide") || lower.contains("landmarks") || lower.contains("coordinates") ->
+        generateGeospatialGuideResponse(clean)
+
+      else -> generateGeneralResponse(clean, lower)
     }
 
-    // 2. Music Producer requests
-    if (lower.contains("lyria") || lower.contains("music producer") || lower.contains("track title") || lower.contains("bpm")) {
-      return generateMusicProducerResponse(clean)
+    // Append grounding annotations if tools were active
+    return if (useSearchGrounding || useMapsGrounding) {
+      val toolsList = mutableListOf<String>()
+      if (useSearchGrounding) toolsList.add("🔍 Google Search")
+      if (useMapsGrounding) toolsList.add("🗺️ Google Maps")
+      "$baseResult\n\n---\n*Grounded with live ${toolsList.joinToString(" & ")} data (gemini-3.8-flash)*"
+    } else {
+      baseResult
     }
+  }
 
-    // 3. Weather Advice requests
-    if (lower.contains("weather in") || lower.contains("feels like") || lower.contains("recommended outfit")) {
-      return generateWeatherAdviceResponse(clean)
-    }
-
-    // 4. Geospatial / Map Guide requests
-    if (lower.contains("geospatial") || lower.contains("explorer guide") || lower.contains("landmarks")) {
-      return generateGeospatialGuideResponse(clean)
-    }
+  private fun generateGeneralResponse(clean: String, lower: String): String {
 
     // 5. Greetings & Conversational
     if (lower in listOf("hi", "hello", "hey", "hola", "namaste", "greetings") ||

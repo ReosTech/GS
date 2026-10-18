@@ -120,9 +120,10 @@ fun AdvancedAiScreen(
                 color = MaterialTheme.colorScheme.onSurface
               )
               Text(
-                text = "Multimodal Intelligence Suite",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                text = "Google Search & Maps Grounded (gemini-3.8-flash)",
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.secondary,
+                fontWeight = FontWeight.Medium
               )
             }
           }

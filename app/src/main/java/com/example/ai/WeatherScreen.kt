@@ -203,7 +203,8 @@ fun WeatherScreen(
         context = context,
         prompt = prompt,
         model = "gemini-3.8-flash",
-        systemInstruction = "You are a concise, helpful meteorologist and daily lifestyle advisor."
+        systemInstruction = "You are a concise, helpful meteorologist and daily lifestyle advisor. Ground all insights with live Google Search data.",
+        useSearchGrounding = true
       )
 
       result.onSuccess { advice ->

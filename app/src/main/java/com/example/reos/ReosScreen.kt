@@ -27,6 +27,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import kotlinx.coroutines.launch
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -51,7 +52,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 
 const val DEFAULT_WEB_URL = "https://reostech.pagekite.me"
-const val FALLBACK_WEB_URL = "https://t.ly/reostech"
+const val REOS_TAB_URL = "https://t.ly/Zalxp"
+const val FALLBACK_WEB_URL = "https://reostech.pagekite.me"
 const val DESKTOP_USER_AGENT =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 
@@ -59,12 +61,14 @@ const val DESKTOP_USER_AGENT =
 @Composable
 fun ReosScreen(
   modifier: Modifier = Modifier,
+  initialUrl: String = REOS_TAB_URL,
   onNavigateToWeather: (() -> Unit)? = null,
   onNavigateToAddons: (() -> Unit)? = null
 ) {
   val context = LocalContext.current
-  var targetUrl by remember { mutableStateOf(DEFAULT_WEB_URL) }
-  var currentLoadedUrl by remember { mutableStateOf(DEFAULT_WEB_URL) }
+  val coroutineScope = rememberCoroutineScope()
+  var targetUrl by remember(initialUrl) { mutableStateOf(initialUrl) }
+  var currentLoadedUrl by remember(initialUrl) { mutableStateOf(initialUrl) }
   var pageTitle by remember { mutableStateOf("Reos app") }
   var loadingProgress by remember { mutableIntStateOf(0) }
   var isLoading by remember { mutableStateOf(true) }
@@ -74,6 +78,7 @@ fun ReosScreen(
   var isWebError by remember { mutableStateOf(false) }
   var errorMessage by remember { mutableStateOf<String?>(null) }
   var isDesktopMode by remember { mutableStateOf(false) }
+  var isSyncingCloud by remember { mutableStateOf(false) }
 
   // Quick Action Sheet & Dialogs
   var showQuickActionsSheet by remember { mutableStateOf(false) }
@@ -129,6 +134,19 @@ fun ReosScreen(
     webViewRef?.onResume()
     onDispose {
       webViewRef?.onPause()
+    }
+  }
+
+  // Automatic failover watchdog: If short URL fails to complete within 4.5s or stalls, switch to backup mirror
+  LaunchedEffect(targetUrl, webViewInstanceKey) {
+    if (targetUrl == REOS_TAB_URL || targetUrl.contains("t.ly")) {
+      kotlinx.coroutines.delay(4500L)
+      if (isLoading && targetUrl != FALLBACK_WEB_URL) {
+        android.util.Log.w("ReosScreen", "Short URL loading timed out. Auto failing over to $FALLBACK_WEB_URL")
+        targetUrl = FALLBACK_WEB_URL
+        currentLoadedUrl = FALLBACK_WEB_URL
+        webViewRef?.loadUrl(FALLBACK_WEB_URL)
+      }
     }
   }
 
@@ -225,12 +243,12 @@ fun ReosScreen(
                 super.onReceivedError(view, request, error)
                 if (request?.isForMainFrame == true) {
                   val failingUrl = request.url?.toString().orEmpty()
-                  if (failingUrl.contains("t.ly/reostech") && targetUrl != FALLBACK_WEB_URL) {
-                    android.util.Log.w("ReosScreen", "Short URL ($failingUrl) failed. Failing over to $DEFAULT_WEB_URL")
-                    targetUrl = DEFAULT_WEB_URL
-                    currentLoadedUrl = DEFAULT_WEB_URL
+                  if (targetUrl != FALLBACK_WEB_URL) {
+                    android.util.Log.w("ReosScreen", "URL ($failingUrl) failed. Failing over to $FALLBACK_WEB_URL")
+                    targetUrl = FALLBACK_WEB_URL
+                    currentLoadedUrl = FALLBACK_WEB_URL
                     isWebError = false
-                    view?.loadUrl(DEFAULT_WEB_URL)
+                    view?.loadUrl(FALLBACK_WEB_URL)
                     return
                   }
                   isLoading = false
@@ -248,12 +266,12 @@ fun ReosScreen(
                 if (request?.isForMainFrame == true) {
                   val failingUrl = request.url?.toString().orEmpty()
                   val statusCode = errorResponse?.statusCode ?: 200
-                  if (statusCode >= 400 && failingUrl.contains("t.ly/reostech") && targetUrl != DEFAULT_WEB_URL) {
-                    android.util.Log.w("ReosScreen", "Short URL returned HTTP $statusCode. Failing over to $DEFAULT_WEB_URL")
-                    targetUrl = DEFAULT_WEB_URL
-                    currentLoadedUrl = DEFAULT_WEB_URL
+                  if (statusCode >= 400 && targetUrl != FALLBACK_WEB_URL) {
+                    android.util.Log.w("ReosScreen", "URL ($failingUrl) returned HTTP $statusCode. Failing over to $FALLBACK_WEB_URL")
+                    targetUrl = FALLBACK_WEB_URL
+                    currentLoadedUrl = FALLBACK_WEB_URL
                     isWebError = false
-                    view?.loadUrl(DEFAULT_WEB_URL)
+                    view?.loadUrl(FALLBACK_WEB_URL)
                   }
                 }
               }
@@ -299,7 +317,22 @@ fun ReosScreen(
 
               override fun onReceivedTitle(view: WebView?, title: String?) {
                 super.onReceivedTitle(view, title)
-                title?.let { pageTitle = it }
+                val clean = title?.trim().orEmpty()
+                if (clean.isNotBlank()) {
+                  pageTitle = clean
+                }
+                val isChallengeOrError = clean.contains("Just a moment", ignoreCase = true) ||
+                  clean.contains("Access denied", ignoreCase = true) ||
+                  clean.contains("Attention Required", ignoreCase = true) ||
+                  clean.contains("403 Forbidden", ignoreCase = true) ||
+                  clean.contains("Cloudflare", ignoreCase = true)
+                if (isChallengeOrError && targetUrl != FALLBACK_WEB_URL) {
+                  android.util.Log.w("ReosScreen", "Title indicated challenge/block ('$clean'). Auto failing over to $FALLBACK_WEB_URL")
+                  targetUrl = FALLBACK_WEB_URL
+                  currentLoadedUrl = FALLBACK_WEB_URL
+                  isWebError = false
+                  view?.loadUrl(FALLBACK_WEB_URL)
+                }
               }
 
               override fun onGeolocationPermissionsShowPrompt(
@@ -411,7 +444,7 @@ fun ReosScreen(
               text = if (isOffline) {
                 "Please verify your Wi-Fi or mobile data connection to access the Reos web service."
               } else {
-                "Unable to connect to https://t.ly/reostech or https://reostech.pagekite.me. Please check your network or server status."
+                "Unable to connect to https://t.ly/Zalxp or https://reostech.pagekite.me. Please check your network or server status."
               },
               fontSize = 14.sp,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -450,26 +483,62 @@ fun ReosScreen(
             }
 
             Row(
-              horizontalArrangement = Arrangement.spacedBy(12.dp),
-              modifier = Modifier.padding(top = 4.dp)
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
             ) {
               OutlinedButton(
-                onClick = { showUrlDialog = true },
-                shape = RoundedCornerShape(16.dp)
+                onClick = {
+                  targetUrl = FALLBACK_WEB_URL
+                  currentLoadedUrl = FALLBACK_WEB_URL
+                  isWebError = false
+                  isOffline = false
+                  webViewRef?.loadUrl(FALLBACK_WEB_URL)
+                },
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.weight(1f)
               ) {
-                Text("Edit Host URL")
+                Text("Backup Mirror", fontSize = 12.sp)
               }
               Button(
                 onClick = {
+                  targetUrl = REOS_TAB_URL
+                  currentLoadedUrl = REOS_TAB_URL
                   isWebError = false
                   isOffline = false
                   webViewInstanceKey++
                 },
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.testTag("retry_connection_button")
+                modifier = Modifier.weight(1f).testTag("retry_connection_button")
               ) {
-                Text("Retry")
+                Text("Retry Reos Tab", fontSize = 12.sp)
               }
+            }
+
+            TextButton(
+              onClick = {
+                coroutineScope.launch {
+                  isSyncingCloud = true
+                  val result = com.example.firebase.FirebaseManager.syncEverything(
+                    context = context,
+                    extraData = mapOf(
+                      "currentUrl" to currentLoadedUrl,
+                      "targetUrl" to targetUrl,
+                      "timestamp" to System.currentTimeMillis()
+                    )
+                  )
+                  result.onSuccess {
+                    Toast.makeText(context, "Cloud sync complete!", Toast.LENGTH_SHORT).show()
+                  }.onFailure { err ->
+                    Toast.makeText(context, "Sync note: ${err.message}", Toast.LENGTH_SHORT).show()
+                  }
+                  isSyncingCloud = false
+                }
+              },
+              modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+              Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(Modifier.width(6.dp))
+              Text(if (isSyncingCloud) "Syncing..." else "Sync Everything Now", fontSize = 12.sp)
             }
           }
         }
@@ -702,6 +771,68 @@ fun ReosScreen(
             Spacer(modifier = Modifier.width(6.dp))
             Text("Clear Cache")
           }
+        }
+
+        // Quick URL Switcher Row
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+          OutlinedButton(
+            onClick = {
+              targetUrl = REOS_TAB_URL
+              currentLoadedUrl = REOS_TAB_URL
+              webViewRef?.loadUrl(REOS_TAB_URL)
+              showQuickActionsSheet = false
+            },
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(16.dp)
+          ) {
+            Text("Reos Tab (t.ly)", fontSize = 12.sp)
+          }
+          OutlinedButton(
+            onClick = {
+              targetUrl = DEFAULT_WEB_URL
+              currentLoadedUrl = DEFAULT_WEB_URL
+              webViewRef?.loadUrl(DEFAULT_WEB_URL)
+              showQuickActionsSheet = false
+            },
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(16.dp)
+          ) {
+            Text("Default Portal", fontSize = 12.sp)
+          }
+        }
+
+        // Sync Everything Action
+        Button(
+          onClick = {
+            coroutineScope.launch {
+              isSyncingCloud = true
+              val result = com.example.firebase.FirebaseManager.syncEverything(
+                context = context,
+                extraData = mapOf(
+                  "currentUrl" to currentLoadedUrl,
+                  "targetUrl" to targetUrl,
+                  "isDesktopMode" to isDesktopMode,
+                  "syncedFrom" to "ReosScreen"
+                )
+              )
+              result.onSuccess {
+                Toast.makeText(context, "All app preferences & state synced to cloud!", Toast.LENGTH_SHORT).show()
+              }.onFailure { err ->
+                Toast.makeText(context, "Sync note: ${err.message}", Toast.LENGTH_SHORT).show()
+              }
+              isSyncingCloud = false
+              showQuickActionsSheet = false
+            }
+          },
+          modifier = Modifier.fillMaxWidth(),
+          shape = RoundedCornerShape(16.dp)
+        ) {
+          Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
+          Spacer(Modifier.width(8.dp))
+          Text(if (isSyncingCloud) "Syncing Everything..." else "Sync Everything to Cloud")
         }
       }
     }

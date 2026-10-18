@@ -51,6 +51,8 @@ fun ChatbotScreen(
     "local-neural-engine" to "Neural Engine (Instant Offline)"
   )
   var selectedModel by remember { mutableStateOf("gemini-3.8-flash") }
+  var useSearchGrounding by remember { mutableStateOf(true) }
+  var useMapsGrounding by remember { mutableStateOf(true) }
   var inputText by remember { mutableStateOf("") }
   var isGenerating by remember { mutableStateOf(false) }
 
@@ -58,16 +60,16 @@ fun ChatbotScreen(
     mutableStateListOf(
       ChatMessage(
         sender = "model",
-        text = "Hello! I am your Advanced AI assistant powered by Gemini and our integrated Multimodal Neural Engine. Ask me anything, request code, calculate math, or brainstorm ideas!"
+        text = "Hello! I am your Advanced AI assistant powered by Gemini 3.8 Flash with live Google Search and Google Maps Grounding. Ask me anything about current events, local places, code, or science!"
       )
     )
   }
 
   val promptSuggestions = listOf(
+    "Latest tech news today",
+    "Best coffee shops near Tokyo Tower",
     "Explain quantum computing simply",
-    "Write Kotlin Compose counter code",
-    "Show Python REST API with Prism.js",
-    "What is 125 * 38?"
+    "Write Kotlin Compose counter code"
   )
 
   fun sendMessage(promptText: String) {
@@ -80,7 +82,12 @@ fun ChatbotScreen(
     coroutineScope.launch {
       listState.animateScrollToItem(messages.size - 1)
       if (selectedModel == "local-neural-engine") {
-        val reply = LocalAiEngine.generateResponse(userMsg.text, selectedModel)
+        val reply = LocalAiEngine.generateResponse(
+          prompt = userMsg.text,
+          model = selectedModel,
+          useSearchGrounding = useSearchGrounding,
+          useMapsGrounding = useMapsGrounding
+        )
         messages.add(ChatMessage(sender = "model", text = reply))
         isGenerating = false
         listState.animateScrollToItem(messages.size - 1)
@@ -92,8 +99,10 @@ fun ChatbotScreen(
         context = context,
         prompt = userMsg.text,
         model = selectedModel,
-        systemInstruction = "You are an intelligent, helpful, and concise AI assistant built with Clean Minimalism principles.",
-        history = history
+        systemInstruction = "You are an intelligent, helpful, and concise AI assistant. Provide verified, factual, and up-to-date information.",
+        history = history,
+        useSearchGrounding = useSearchGrounding,
+        useMapsGrounding = useMapsGrounding
       )
 
       result.onSuccess { reply ->
@@ -101,7 +110,12 @@ fun ChatbotScreen(
         isGenerating = false
         listState.animateScrollToItem(messages.size - 1)
       }.onFailure {
-        val fallbackReply = LocalAiEngine.generateResponse(userMsg.text, selectedModel)
+        val fallbackReply = LocalAiEngine.generateResponse(
+          prompt = userMsg.text,
+          model = selectedModel,
+          useSearchGrounding = useSearchGrounding,
+          useMapsGrounding = useMapsGrounding
+        )
         messages.add(ChatMessage(sender = "model", text = fallbackReply))
         isGenerating = false
         listState.animateScrollToItem(messages.size - 1)
@@ -114,49 +128,91 @@ fun ChatbotScreen(
       .fillMaxSize()
       .background(MaterialTheme.colorScheme.background)
   ) {
-    // Model Selection Bar
-    Row(
+    // Model & Grounding Selection Bar
+    Column(
       modifier = Modifier
         .fillMaxWidth()
         .background(MaterialTheme.colorScheme.surfaceContainer)
-        .padding(horizontal = 12.dp, vertical = 8.dp)
-        .horizontalScroll(rememberScrollState()),
-      horizontalArrangement = Arrangement.spacedBy(8.dp),
-      verticalAlignment = Alignment.CenterVertically
     ) {
-      Text(
-        text = "Model:",
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-      )
-      availableModels.forEach { (modelId, displayName) ->
-        val isSelected = selectedModel == modelId
-        FilterChip(
-          selected = isSelected,
-          onClick = { selectedModel = modelId },
-          label = { Text(displayName, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
-          colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-          ),
-          shape = RoundedCornerShape(14.dp)
-        )
-      }
-      Spacer(modifier = Modifier.weight(1f))
-      IconButton(
-        onClick = {
-          messages.clear()
-          messages.add(
-            ChatMessage(
-              sender = "model",
-              text = "Chat cleared. What would you like to explore next?"
-            )
-          )
-        },
-        modifier = Modifier.size(32.dp).testTag("clear_chat_button")
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 12.dp, vertical = 6.dp)
+          .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
       ) {
-        Icon(Icons.Default.DeleteOutline, contentDescription = "Clear Chat", modifier = Modifier.size(18.dp))
+        Text(
+          text = "Model:",
+          fontSize = 12.sp,
+          fontWeight = FontWeight.Bold,
+          color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        availableModels.forEach { (modelId, displayName) ->
+          val isSelected = selectedModel == modelId
+          FilterChip(
+            selected = isSelected,
+            onClick = { selectedModel = modelId },
+            label = { Text(displayName, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+            colors = FilterChipDefaults.filterChipColors(
+              selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+              selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+            ),
+            shape = RoundedCornerShape(14.dp)
+          )
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        IconButton(
+          onClick = {
+            messages.clear()
+            messages.add(
+              ChatMessage(
+                sender = "model",
+                text = "Chat cleared. What would you like to explore next?"
+              )
+            )
+          },
+          modifier = Modifier.size(32.dp).testTag("clear_chat_button")
+        ) {
+          Icon(Icons.Default.DeleteOutline, contentDescription = "Clear Chat", modifier = Modifier.size(18.dp))
+        }
+      }
+
+      // Grounding Tools Row (Google Search & Google Maps Grounding)
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 12.dp, vertical = 4.dp)
+          .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Text(
+          text = "Tools:",
+          fontSize = 11.sp,
+          fontWeight = FontWeight.SemiBold,
+          color = MaterialTheme.colorScheme.outline
+        )
+        FilterChip(
+          selected = useSearchGrounding,
+          onClick = { useSearchGrounding = !useSearchGrounding },
+          label = { Text("🔍 Google Search Grounding", fontSize = 11.sp) },
+          colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+            selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
+          ),
+          shape = RoundedCornerShape(12.dp)
+        )
+        FilterChip(
+          selected = useMapsGrounding,
+          onClick = { useMapsGrounding = !useMapsGrounding },
+          label = { Text("🗺️ Google Maps Grounding", fontSize = 11.sp) },
+          colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            selectedLabelColor = MaterialTheme.colorScheme.onTertiaryContainer
+          ),
+          shape = RoundedCornerShape(12.dp)
+        )
       }
     }
 
