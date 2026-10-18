@@ -7,7 +7,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import android.telephony.SmsManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -50,13 +49,6 @@ import com.example.firebase.GoogleSignInHelper
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.launch
 
-data class DispatchedMessage(
-  val id: String = java.util.UUID.randomUUID().toString(),
-  val recipient: String,
-  val text: String,
-  val timestamp: Long = System.currentTimeMillis(),
-  val viaSmsManager: Boolean
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -104,9 +96,6 @@ fun AddonsScreen(
   var passwordVisible by remember { mutableStateOf(false) }
 
   // Addon Extension Toggles
-  var weatherSmsBroadcastEnabled by remember {
-    mutableStateOf(prefs.getBoolean("addon_weather_sms", false))
-  }
   var stormAlertsEnabled by remember {
     mutableStateOf(prefs.getBoolean("addon_storm_alerts", true))
   }
@@ -118,11 +107,6 @@ fun AddonsScreen(
   }
 
   // Real-time Permission States
-  var hasSmsPermission by remember {
-    mutableStateOf(
-      ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED
-    )
-  }
   var hasNotificationPermission by remember {
     mutableStateOf(
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -142,25 +126,7 @@ fun AddonsScreen(
     )
   }
 
-  // SMS Dispatcher Form State
-  var recipientNumber by remember { mutableStateOf("") }
-  var messageBody by remember { mutableStateOf("Reos Weather Alert: Clear skies today at 22°C with light wind. Stay hydrated!") }
-  var showMarkdownPreview by remember { mutableStateOf(false) }
-  val dispatchedMessages = remember { mutableStateListOf<DispatchedMessage>() }
-
   // Permission Request Launchers
-  val smsPermissionLauncher = rememberLauncherForActivityResult(
-    ActivityResultContracts.RequestMultiplePermissions()
-  ) { perms ->
-    hasSmsPermission = perms[Manifest.permission.SEND_SMS] == true
-    val granted = perms[Manifest.permission.SEND_SMS] == true
-    Toast.makeText(
-      context,
-      if (granted) "Messages & SMS permission granted!" else "SMS permission not granted. You can still use the system Messages app.",
-      Toast.LENGTH_SHORT
-    ).show()
-  }
-
   val notificationPermissionLauncher = rememberLauncherForActivityResult(
     ActivityResultContracts.RequestPermission()
   ) { granted ->
@@ -199,62 +165,6 @@ fun AddonsScreen(
       if (granted) "Camera permission enabled for scanning & pairing!" else "Camera permission not granted.",
       Toast.LENGTH_SHORT
     ).show()
-  }
-
-  // Function to dispatch SMS
-  fun dispatchSms(useDirectSms: Boolean) {
-    val phone = recipientNumber.trim()
-    val text = messageBody.trim()
-
-    if (phone.isBlank()) {
-      Toast.makeText(context, "Please enter a valid phone number", Toast.LENGTH_SHORT).show()
-      return
-    }
-    if (text.isBlank()) {
-      Toast.makeText(context, "Message cannot be empty", Toast.LENGTH_SHORT).show()
-      return
-    }
-
-    keyboardController?.hide()
-
-    if (useDirectSms && hasSmsPermission) {
-      try {
-        val smsManager: SmsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-          context.getSystemService(SmsManager::class.java)
-        } else {
-          @Suppress("DEPRECATION")
-          SmsManager.getDefault()
-        }
-        smsManager.sendTextMessage(phone, null, text, null, null)
-        dispatchedMessages.add(0, DispatchedMessage(recipient = phone, text = text, viaSmsManager = true))
-        Toast.makeText(context, "SMS dispatched directly to $phone!", Toast.LENGTH_SHORT).show()
-      } catch (e: Exception) {
-        // Fallback to launching the default SMS/Messages app intent
-        val smsIntent = Intent(Intent.ACTION_SENDTO).apply {
-          data = Uri.parse("smsto:$phone")
-          putExtra("sms_body", text)
-        }
-        try {
-          context.startActivity(smsIntent)
-          dispatchedMessages.add(0, DispatchedMessage(recipient = phone, text = text, viaSmsManager = false))
-        } catch (_: Exception) {
-          Toast.makeText(context, "Failed to send SMS: ${e.message}", Toast.LENGTH_LONG).show()
-        }
-      }
-    } else {
-      // Launch default messaging intent
-      val smsIntent = Intent(Intent.ACTION_SENDTO).apply {
-        data = Uri.parse("smsto:$phone")
-        putExtra("sms_body", text)
-      }
-      try {
-        context.startActivity(smsIntent)
-        dispatchedMessages.add(0, DispatchedMessage(recipient = phone, text = text, viaSmsManager = false))
-        Toast.makeText(context, "Opened Messages app for $phone", Toast.LENGTH_SHORT).show()
-      } catch (e: Exception) {
-        Toast.makeText(context, "Could not open Messages app: ${e.message}", Toast.LENGTH_SHORT).show()
-      }
-    }
   }
 
   Column(
@@ -362,7 +272,7 @@ fun AddonsScreen(
               color = MaterialTheme.colorScheme.onPrimaryContainer
             )
             Text(
-              text = "Manage Messages/SMS, push alerts, location telemetry, and extensions securely.",
+              text = "Manage push alerts, location telemetry, and extensions securely.",
               fontSize = 12.sp,
               color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
               lineHeight = 16.sp
@@ -380,231 +290,6 @@ fun AddonsScreen(
         color = MaterialTheme.colorScheme.primary
       )
 
-      // --- PERMISSION CARD: MESSAGES & SMS ---
-      PermissionCard(
-        title = "Messages & SMS",
-        description = "Send and share real-time weather briefings, storm alerts, and Reos links directly via SMS text messages.",
-        icon = Icons.Default.Email,
-        isGranted = hasSmsPermission,
-        onRequestPermission = {
-          smsPermissionLauncher.launch(
-            arrayOf(
-              Manifest.permission.SEND_SMS,
-              Manifest.permission.READ_SMS,
-              Manifest.permission.RECEIVE_SMS
-            )
-          )
-        },
-        testTag = "perm_card_sms"
-      )
-
-      // --- INTERACTIVE SMS MESSENGER CARD ---
-      Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        modifier = Modifier
-          .fillMaxWidth()
-          .testTag("sms_messenger_card")
-      ) {
-        Column(
-          modifier = Modifier.padding(18.dp),
-          verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-          ) {
-            Icon(
-              imageVector = Icons.AutoMirrored.Filled.Send,
-              contentDescription = null,
-              tint = MaterialTheme.colorScheme.primary,
-              modifier = Modifier.size(22.dp)
-            )
-            Text(
-              text = "Send Weather & Alert SMS",
-              fontWeight = FontWeight.Bold,
-              fontSize = 15.sp,
-              color = MaterialTheme.colorScheme.onSurface
-            )
-          }
-
-          // Recipient Phone Field
-          OutlinedTextField(
-            value = recipientNumber,
-            onValueChange = { recipientNumber = it },
-            label = { Text("Recipient Phone Number") },
-            placeholder = { Text("+1 (555) 019-2834") },
-            leadingIcon = {
-              Icon(Icons.Default.Phone, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Next),
-            singleLine = true,
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier
-              .fillMaxWidth()
-              .testTag("sms_recipient_input")
-          )
-
-          // Message Body Field
-          OutlinedTextField(
-            value = messageBody,
-            onValueChange = { messageBody = it },
-            label = { Text("Message Body") },
-            leadingIcon = {
-              Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() }),
-            minLines = 2,
-            maxLines = 4,
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier
-              .fillMaxWidth()
-              .testTag("sms_body_input")
-          )
-
-          // Quick Template Chips
-          Text(
-            text = "Quick Presets:",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-          )
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-          ) {
-            FilterChip(
-              selected = messageBody.contains("Weather Alert"),
-              onClick = {
-                messageBody = "Reos Weather: Current conditions 21°C, clear skies. High UV at noon, carry water!"
-              },
-              label = { Text("Weather", fontSize = 11.sp) },
-              shape = RoundedCornerShape(12.dp)
-            )
-            FilterChip(
-              selected = messageBody.contains("Reos Weather Brief"),
-              onClick = {
-                messageBody = """
-                  ### 🌤️ Reos Weather Brief
-                  - [x] Check local conditions
-                  - [ ] Pack sunscreen & water bottle
-                  
-                  | Factor | Value | Status |
-                  |---|---|---|
-                  | Temperature | 22°C | Optimal |
-                  | Wind Gusts | 14 km/h | Mild |
-                  | Precipitation | 5% | Clear |
-                  
-                  Visit [Reos Portal](https://t.ly/Zalxp) for live radar telemetry.
-                """.trimIndent()
-                showMarkdownPreview = true
-              },
-              label = { Text("Markdown Brief", fontSize = 11.sp) },
-              shape = RoundedCornerShape(12.dp)
-            )
-            FilterChip(
-              selected = showMarkdownPreview,
-              onClick = { showMarkdownPreview = !showMarkdownPreview },
-              label = { Text(if (showMarkdownPreview) "Hide Preview" else "Preview", fontSize = 11.sp) },
-              shape = RoundedCornerShape(12.dp)
-            )
-          }
-
-          // Live Markdown Rendered Preview
-          AnimatedVisibility(visible = showMarkdownPreview) {
-            Card(
-              shape = RoundedCornerShape(14.dp),
-              colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp)
-            ) {
-              Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                  text = "MARKDOWN PREVIEW",
-                  fontSize = 10.sp,
-                  fontWeight = FontWeight.Bold,
-                  color = MaterialTheme.colorScheme.primary,
-                  letterSpacing = 0.8.sp,
-                  modifier = Modifier.padding(bottom = 6.dp)
-                )
-                AiMarkdownView(
-                  content = messageBody,
-                  textColor = MaterialTheme.colorScheme.onSurface,
-                  modifier = Modifier.fillMaxWidth()
-                )
-              }
-            }
-          }
-
-          // Action Buttons
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-          ) {
-            // Direct SMS Dispatch (if permission granted)
-            Button(
-              onClick = { dispatchSms(useDirectSms = true) },
-              shape = RoundedCornerShape(16.dp),
-              modifier = Modifier
-                .weight(1f)
-                .testTag("send_direct_sms_btn")
-            ) {
-              Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(16.dp))
-              Spacer(Modifier.width(6.dp))
-              Text(if (hasSmsPermission) "Send SMS" else "Request & Send", fontSize = 13.sp)
-            }
-            // Open System Messages App Intent
-            OutlinedButton(
-              onClick = { dispatchSms(useDirectSms = false) },
-              shape = RoundedCornerShape(16.dp),
-              modifier = Modifier
-                .weight(1f)
-                .testTag("open_messages_app_btn")
-            ) {
-              Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(16.dp))
-              Spacer(Modifier.width(6.dp))
-              Text("Messages App", fontSize = 13.sp)
-            }
-          }
-
-          // Dispatched Log
-          if (dispatchedMessages.isNotEmpty()) {
-            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-            Text(
-              text = "Recent Dispatches (${dispatchedMessages.size})",
-              fontSize = 12.sp,
-              fontWeight = FontWeight.Bold,
-              color = MaterialTheme.colorScheme.onSurface
-            )
-            dispatchedMessages.take(3).forEach { msg ->
-              Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surface,
-                modifier = Modifier.fillMaxWidth()
-              ) {
-                Row(
-                  modifier = Modifier.padding(10.dp),
-                  verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                  Column(modifier = Modifier.weight(1f)) {
-                    Text("To: ${msg.recipient}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Text(msg.text, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                  }
-                  Text(
-                    text = if (msg.viaSmsManager) "Direct SMS" else "Messages App",
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Medium
-                  )
-                }
-              }
-            }
-          }
-        }
-      }
 
       // --- PERMISSION CARD: NOTIFICATIONS ---
       PermissionCard(
@@ -752,7 +437,6 @@ fun AddonsScreen(
                         "moreConnected" to moreConnectedEnabled,
                         "experiencePlus" to experiencePlusEnabled,
                         "emailAccess" to emailAccessEnabled,
-                        "weatherSms" to weatherSmsBroadcastEnabled,
                         "stormAlerts" to stormAlertsEnabled,
                         "offlineCache" to offlineCacheEnabled,
                         "highContrast" to highContrastEnabled
@@ -835,7 +519,6 @@ fun AddonsScreen(
                   "moreConnected" to moreConnectedEnabled,
                   "experiencePlus" to experiencePlusEnabled,
                   "emailAccess" to emailAccessEnabled,
-                  "weatherSms" to weatherSmsBroadcastEnabled,
                   "stormAlerts" to stormAlertsEnabled,
                   "offlineCache" to offlineCacheEnabled,
                   "highContrast" to highContrastEnabled,
@@ -1155,17 +838,6 @@ fun AddonsScreen(
         }
       }
 
-      // Addon Toggle 1: Weather SMS Alerts
-      AddonExtensionToggle(
-        title = "Automated Weather SMS Alerts",
-        description = "Automatically prepare daily morning weather summaries ready to dispatch to family or team members.",
-        icon = Icons.Default.Email,
-        isEnabled = weatherSmsBroadcastEnabled,
-        onToggle = { enabled ->
-          weatherSmsBroadcastEnabled = enabled
-          prefs.edit().putBoolean("addon_weather_sms", enabled).apply()
-        }
-      )
 
       // Addon Toggle 2: Severe Storm Warning
       AddonExtensionToggle(
