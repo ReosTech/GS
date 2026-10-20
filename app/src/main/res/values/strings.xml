@@ -4,5 +4,4 @@
     <string name="widget_quick_desc">Instantly open Reos web portal and live connected services.</string>
     <string name="widget_weather_name">Reos Weather &amp; Alerts</string>
     <string name="widget_weather_desc">View current temperature, weather conditions, and Reos alerts.</string>
-    <string name="default_web_client_id">105684719158-6ivsv62jqgfelooijde4pviaou2cil9i.apps.googleusercontent.com</string>
 </resources>

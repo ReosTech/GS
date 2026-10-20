@@ -83,7 +83,7 @@ object FirebaseManager {
           "updatedAt" to com.google.firebase.Timestamp.now(),
           "settings" to extraData,
           "defaultUrl" to "https://reostech.pagekite.me",
-          "reosTabUrl" to "https://t.ly/Zalxp",
+          "reosTabUrl" to "https://reostech.pgekite.me",
           "fallbackUrl" to "https://reostech.pagekite.me",
           "grounding" to mapOf(
             "googleSearch" to true,

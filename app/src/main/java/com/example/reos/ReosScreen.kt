@@ -52,7 +52,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 
 const val DEFAULT_WEB_URL = "https://reostech.pagekite.me"
-const val REOS_TAB_URL = "https://t.ly/Zalxp"
+const val REOS_TAB_URL = "https://reostech.pgekite.me"
 const val FALLBACK_WEB_URL = "https://reostech.pagekite.me"
 const val DESKTOP_USER_AGENT =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
@@ -63,12 +63,14 @@ fun ReosScreen(
   modifier: Modifier = Modifier,
   initialUrl: String = REOS_TAB_URL,
   onNavigateToWeather: (() -> Unit)? = null,
-  onNavigateToAddons: (() -> Unit)? = null
+  onNavigateToAddons: (() -> Unit)? = null,
+  isActiveTab: Boolean = true
 ) {
   val context = LocalContext.current
   val coroutineScope = rememberCoroutineScope()
-  var targetUrl by remember(initialUrl) { mutableStateOf(initialUrl) }
-  var currentLoadedUrl by remember(initialUrl) { mutableStateOf(initialUrl) }
+  val safeInitialUrl = if (initialUrl.contains("pgekite.me")) FALLBACK_WEB_URL else initialUrl
+  var targetUrl by remember(initialUrl) { mutableStateOf(safeInitialUrl) }
+  var currentLoadedUrl by remember(initialUrl) { mutableStateOf(safeInitialUrl) }
   var pageTitle by remember { mutableStateOf("Reos app") }
   var loadingProgress by remember { mutableIntStateOf(0) }
   var isLoading by remember { mutableStateOf(true) }
@@ -131,15 +133,26 @@ fun ReosScreen(
   }
 
   DisposableEffect(Unit) {
-    webViewRef?.onResume()
+    if (isActiveTab) webViewRef?.onResume()
     onDispose {
+      try {
+        webViewRef?.onPause()
+        webViewRef?.stopLoading()
+      } catch (_: Exception) {}
+    }
+  }
+
+  LaunchedEffect(isActiveTab) {
+    if (isActiveTab) {
+      webViewRef?.onResume()
+    } else {
       webViewRef?.onPause()
     }
   }
 
   // Automatic failover watchdog: If short URL fails to complete within 4.5s or stalls, switch to backup mirror
   LaunchedEffect(targetUrl, webViewInstanceKey) {
-    if (targetUrl == REOS_TAB_URL || targetUrl.contains("t.ly")) {
+    if (targetUrl == REOS_TAB_URL || targetUrl.contains("pgekite")) {
       kotlinx.coroutines.delay(4500L)
       if (isLoading && targetUrl != FALLBACK_WEB_URL) {
         android.util.Log.w("ReosScreen", "Short URL loading timed out. Auto failing over to $FALLBACK_WEB_URL")
@@ -167,7 +180,7 @@ fun ReosScreen(
               ViewGroup.LayoutParams.MATCH_PARENT,
               ViewGroup.LayoutParams.MATCH_PARENT
             )
-            // Standard hardware layer; avoid forcing LAYER_TYPE_SOFTWARE which breaks Mesa DRI and sandboxed Chromium
+            // Standard hardware compositing layer; avoid forcing LAYER_TYPE_SOFTWARE which breaks Chromium sandbox
             setLayerType(View.LAYER_TYPE_NONE, null)
             webViewRef = this
             setupWebSettings(this, isDesktopMode)
@@ -287,15 +300,16 @@ fun ReosScreen(
                 }
                 android.util.Log.w("ReosScreen", "WebView render process exited (didCrash=$didCrash). Protecting app stability.")
                 try {
-                  view?.let {
-                    val parent = it.parent as? ViewGroup
-                    parent?.removeView(it)
-                    it.destroy()
+                  view?.let { v ->
+                    (v.parent as? ViewGroup)?.removeView(v)
+                    v.destroy()
                   }
                 } catch (_: Exception) {}
                 webViewRef = null
                 if (renderCrashCount < 2) {
                   renderCrashCount++
+                  targetUrl = FALLBACK_WEB_URL
+                  currentLoadedUrl = FALLBACK_WEB_URL
                   webViewInstanceKey++
                 } else {
                   isLoading = false
@@ -368,11 +382,15 @@ fun ReosScreen(
         },
         update = { view ->
           webViewRef = view
-          val targetUserAgent = if (isDesktopMode) DESKTOP_USER_AGENT else null
-          if (view.settings.userAgentString != targetUserAgent) {
-            view.settings.userAgentString = targetUserAgent
-            view.reload()
-          }
+        },
+        onRelease = { view ->
+          try {
+            view.stopLoading()
+            view.loadUrl("about:blank")
+            view.clearHistory()
+            (view.parent as? ViewGroup)?.removeView(view)
+            view.destroy()
+          } catch (_: Exception) {}
         }
       )
     }
@@ -444,7 +462,7 @@ fun ReosScreen(
               text = if (isOffline) {
                 "Please verify your Wi-Fi or mobile data connection to access the Reos web service."
               } else {
-                "Unable to connect to https://t.ly/Zalxp or https://reostech.pagekite.me. Please check your network or server status."
+                "Unable to connect to https://reostech.pgekite.me or https://reostech.pagekite.me. Please check your network or server status."
               },
               fontSize = 14.sp,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -788,7 +806,7 @@ fun ReosScreen(
             modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(16.dp)
           ) {
-            Text("Reos Tab (t.ly)", fontSize = 12.sp)
+            Text("Reos Tab", fontSize = 12.sp)
           }
           OutlinedButton(
             onClick = {
@@ -887,7 +905,6 @@ fun setupWebSettings(webView: WebView, isDesktop: Boolean) {
   if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
     webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
   }
-  val prefs = webView.context.getSharedPreferences("reos_prefs", Context.MODE_PRIVATE)
   webView.settings.apply {
     javaScriptEnabled = true
     domStorageEnabled = true

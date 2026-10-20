@@ -85,22 +85,40 @@ fun MainAppContainer(
         .fillMaxSize()
         .windowInsetsPadding(WindowInsets.statusBars)
     ) {
-      AnimatedContent(
-        targetState = currentTab,
-        transitionSpec = { fadeIn() togetherWith fadeOut() },
-        label = "tab_switch_animation"
-      ) { tab ->
-        when (tab) {
-          MainAppTab.REOS -> ReosScreen(
-            initialUrl = com.example.reos.REOS_TAB_URL,
-            onNavigateToWeather = { currentTab = MainAppTab.WEATHER },
-            onNavigateToAddons = { currentTab = MainAppTab.ADDONS }
+      // 1. Primary Reos Screen (retained across tabs to preserve WebView session & prevent renderer crash)
+      Box(
+        modifier = Modifier
+          .fillMaxSize()
+          .then(
+            if (currentTab == MainAppTab.REOS) Modifier else Modifier.size(0.dp)
           )
-          MainAppTab.WEATHER -> WeatherScreen()
-          MainAppTab.ADDONS -> AddonsScreen(
-            onNavigateToWeather = { currentTab = MainAppTab.WEATHER }
-          )
-        }
+      ) {
+        ReosScreen(
+          initialUrl = com.example.reos.REOS_TAB_URL,
+          onNavigateToWeather = { currentTab = MainAppTab.WEATHER },
+          onNavigateToAddons = { currentTab = MainAppTab.ADDONS },
+          isActiveTab = currentTab == MainAppTab.REOS
+        )
+      }
+
+      // 2. Weather Tab
+      AnimatedVisibility(
+        visible = currentTab == MainAppTab.WEATHER,
+        enter = fadeIn(),
+        exit = fadeOut()
+      ) {
+        WeatherScreen()
+      }
+
+      // 3. Add-ons Tab
+      AnimatedVisibility(
+        visible = currentTab == MainAppTab.ADDONS,
+        enter = fadeIn(),
+        exit = fadeOut()
+      ) {
+        AddonsScreen(
+          onNavigateToWeather = { currentTab = MainAppTab.WEATHER }
+        )
       }
     }
     // 2. Ultra-Modern Flat Navigation Bar

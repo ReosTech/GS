@@ -1,10 +1,6 @@
 package com.example.ai
 
 import android.content.Context
-import android.media.AudioAttributes
-import android.media.AudioFormat
-import android.media.AudioTrack
-import android.util.Base64
 import android.util.Log
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
@@ -16,7 +12,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
-import kotlin.math.sin
 
 object AiService {
   private const val TAG = "AiService"
@@ -493,88 +488,5 @@ object AiService {
       96, 99 -> "Thunderstorm with hail"
       else -> "Cloudy & mild"
     }
-  }
-
-  // --- Real Audio Track Synthesis for Music Generation ---
-  private var activeAudioTrack: AudioTrack? = null
-
-  fun playSynthesizedMusic(
-    notes: List<Pair<Double, Int>>, // frequency in Hz, duration in ms
-    onPlaybackComplete: () -> Unit
-  ) {
-    stopSynthesizedMusic()
-    Thread {
-      try {
-        val sampleRate = 44100
-        val audioFormat = AudioFormat.Builder()
-          .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-          .setSampleRate(sampleRate)
-          .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-          .build()
-
-        val audioAttributes = AudioAttributes.Builder()
-          .setUsage(AudioAttributes.USAGE_MEDIA)
-          .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-          .build()
-
-        val bufferSize = AudioTrack.getMinBufferSize(
-          sampleRate,
-          AudioFormat.CHANNEL_OUT_MONO,
-          AudioFormat.ENCODING_PCM_16BIT
-        )
-
-        val track = AudioTrack.Builder()
-          .setAudioAttributes(audioAttributes)
-          .setAudioFormat(audioFormat)
-          .setBufferSizeInBytes(bufferSize * 4)
-          .setTransferMode(AudioTrack.MODE_STREAM)
-          .build()
-
-        activeAudioTrack = track
-        track.play()
-
-        for ((freq, durationMs) in notes) {
-          if (activeAudioTrack == null) break
-          val numSamples = (sampleRate * (durationMs / 1000.0)).toInt()
-          val buffer = ShortArray(numSamples)
-          for (i in 0 until numSamples) {
-            val time = i.toDouble() / sampleRate
-            // Rich harmonic synthesis with ADSR envelope
-            val envelope = if (i < numSamples * 0.1) {
-              i / (numSamples * 0.1) // Attack
-            } else if (i > numSamples * 0.7) {
-              (numSamples - i) / (numSamples * 0.3) // Release
-            } else {
-              1.0 // Sustain
-            }
-            // Fundamental + 2nd + 3rd harmonic for musical warmth
-            val sample = (
-              0.6 * sin(2.0 * Math.PI * freq * time) +
-              0.25 * sin(2.0 * Math.PI * freq * 2 * time) +
-              0.15 * sin(2.0 * Math.PI * freq * 3 * time)
-            ) * envelope
-            buffer[i] = (sample * 32767).toInt().toShort()
-          }
-          track.write(buffer, 0, buffer.size)
-        }
-
-        track.stop()
-        track.release()
-        activeAudioTrack = null
-        onPlaybackComplete()
-      } catch (e: Exception) {
-        Log.e(TAG, "Audio synth error", e)
-        activeAudioTrack = null
-        onPlaybackComplete()
-      }
-    }.start()
-  }
-
-  fun stopSynthesizedMusic() {
-    try {
-      activeAudioTrack?.stop()
-      activeAudioTrack?.release()
-    } catch (_: Exception) {}
-    activeAudioTrack = null
   }
 }
