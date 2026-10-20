@@ -1,12 +1,20 @@
 package com.example.ai
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.os.Build
+import android.view.View
+import android.view.ViewGroup
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -536,6 +544,16 @@ fun WeatherScreen(
             }
           }
 
+          // Smooth 3D Weather Elements (Positioned directly under the Temperature)
+          SmoothWeather3DView(
+            weatherCode = data.weatherCode,
+            isDay = data.isDay,
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(200.dp)
+              .clip(RoundedCornerShape(20.dp))
+          )
+
           // Quick Highlights Pill Row
           Row(
             modifier = Modifier.fillMaxWidth(),
@@ -808,5 +826,100 @@ fun HourlyItemCard(item: AiService.HourlyWeather) {
         Text("0%", fontSize = 10.sp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
       }
     }
+  }
+}
+
+@SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
+@Composable
+fun SmoothWeather3DView(
+  weatherCode: Int,
+  isDay: Boolean,
+  modifier: Modifier = Modifier
+) {
+  var webViewRef by remember { mutableStateOf<WebView?>(null) }
+
+  // Sync meteorological condition with Three.js scene
+  LaunchedEffect(weatherCode, isDay, webViewRef) {
+    webViewRef?.evaluateJavascript(
+      "if (window.setWeatherFromAndroid) { window.setWeatherFromAndroid($weatherCode, $isDay); }",
+      null
+    )
+  }
+
+  Box(
+    modifier = modifier
+      .background(Color(0x18000000))
+      .testTag("smooth_weather_3d_view")
+  ) {
+    AndroidView(
+      modifier = Modifier.fillMaxSize(),
+      factory = { ctx ->
+        WebView(ctx).apply {
+          layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+          )
+          setBackgroundColor(0x00000000)
+          setLayerType(View.LAYER_TYPE_HARDWARE, null)
+          settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            allowFileAccess = true
+            allowContentAccess = true
+            useWideViewPort = true
+            loadWithOverviewMode = true
+            cacheMode = WebSettings.LOAD_DEFAULT
+          }
+          // Interactive touch listener without interfering with outer verticalScroll
+          setOnTouchListener { v, event ->
+            when (event.action) {
+              android.view.MotionEvent.ACTION_DOWN,
+              android.view.MotionEvent.ACTION_MOVE -> {
+                v.parent?.requestDisallowInterceptTouchEvent(true)
+              }
+              android.view.MotionEvent.ACTION_UP,
+              android.view.MotionEvent.ACTION_CANCEL -> {
+                v.parent?.requestDisallowInterceptTouchEvent(false)
+              }
+            }
+            false
+          }
+          webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView?, url: String?) {
+              super.onPageFinished(view, url)
+              view?.evaluateJavascript(
+                "if (window.setWeatherFromAndroid) { window.setWeatherFromAndroid($weatherCode, $isDay); }",
+                null
+              )
+            }
+
+            override fun onRenderProcessGone(
+              view: WebView?,
+              detail: android.webkit.RenderProcessGoneDetail?
+            ): Boolean {
+              try {
+                (view?.parent as? ViewGroup)?.removeView(view)
+                view?.destroy()
+              } catch (_: Exception) {}
+              webViewRef = null
+              return true
+            }
+          }
+          loadUrl("file:///android_asset/weather_3d.html")
+          webViewRef = this
+        }
+      },
+      update = { view ->
+        webViewRef = view
+      },
+      onRelease = { view ->
+        try {
+          view.stopLoading()
+          view.loadUrl("about:blank")
+          (view.parent as? ViewGroup)?.removeView(view)
+          view.destroy()
+        } catch (_: Exception) {}
+      }
+    )
   }
 }

@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>Smooth Fixed 3D Weather</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    #webgl-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      touch-action: none;
+    }
+    /* Compact Weather Simulation Bar directly under 3D canvas */
+    .sim-bar {
+      position: absolute;
+      bottom: 6px;
+      left: 6px;
+      right: 6px;
+      display: flex;
+      justify-content: center;
+      gap: 5px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+      z-index: 10;
+      pointer-events: auto;
+    }
+    .sim-bar::-webkit-scrollbar { display: none; }
+    .sim-btn {
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      padding: 4px 9px;
+      color: #94a3b8;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: all 0.2s ease;
+    }
+    .sim-btn.active {
+      background: rgba(37, 99, 235, 0.85);
+      color: #ffffff;
+      border-color: #93c5fd;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
+    }
+    .status-badge {
+      position: absolute;
+      top: 6px;
+      left: 8px;
+      background: rgba(15, 23, 42, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      padding: 3px 8px;
+      color: #f1f5f9;
+      font-size: 10px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      pointer-events: none;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+  </style>
+  <script src="file:///android_asset/three.min.js"></script>
+</head>
+<body>
+  <div id="webgl-container"></div>
+
+  <!-- Subtle Status Indicator -->
+  <div class="status-badge" id="status-badge">
+    <span id="badge-icon">☀️</span>
+    <span id="badge-title">Smooth 3D Weather</span>
+  </div>
+
+  <!-- Weather Quick Simulation Bar -->
+  <div class="sim-bar">
+    <button class="sim-btn active" data-mode="clear">☀️ Clear</button>
+    <button class="sim-btn" data-mode="clouds">⛅ Clouds</button>
+    <button class="sim-btn" data-mode="rain">🌧️ Rain</button>
+    <button class="sim-btn" data-mode="storm">⛈️ Storm</button>
+    <button class="sim-btn" data-mode="snow">❄️ Snow</button>
+    <button class="sim-btn" data-mode="night">🌙 Night</button>
+  </div>
+
+  <script>
+    // --- 1. Three.js Setup with Smooth Edges & Transparent Canvas ---
+    const container = document.getElementById('webgl-container');
+    const scene = new THREE.Scene();
+
+    // Fixed Camera Position for Stable, Beautiful Framing
+    const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
+    const FIXED_CAM_POS = new THREE.Vector3(0, 1.6, 8.2);
+    camera.position.copy(FIXED_CAM_POS);
+    camera.lookAt(0, 0.5, 0);
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      powerPreference: "high-performance"
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.5));
+    renderer.setClearColor(0x000000, 0); // Transparent background to blend into host card
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    // --- 2. Studio Lighting with Soft Shadows ---
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x334155, 0.85);
+    scene.add(hemiLight);
+
+    const dirLight = new THREE.DirectionalLight(0xfff7ed, 1.4);
+    dirLight.position.set(6, 10, 5);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 1024;
+    dirLight.shadow.mapSize.height = 1024;
+    dirLight.shadow.radius = 3;
+    dirLight.shadow.bias = -0.0005;
+    scene.add(dirLight);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+    scene.add(ambientLight);
+
+    const lightningLight = new THREE.PointLight(0xbae6fd, 0, 20);
+    lightningLight.position.set(0, 3.5, 0);
+    scene.add(lightningLight);
+
+    // --- 3. Smooth Procedural 3D Weather Elements ---
+    const rootGroup = new THREE.Group();
+    scene.add(rootGroup);
+
+    // A. Smooth Beveled Floating Biome
+    const islandGroup = new THREE.Group();
+    rootGroup.add(islandGroup);
+
+    // Smooth Curved Grass Top Platter
+    const grassGeo = new THREE.CylinderGeometry(3.6, 3.4, 0.65, 48);
+    grassGeo.computeVertexNormals();
+    const grassMat = new THREE.MeshStandardMaterial({
+      color: 0x22c55e,
+      roughness: 0.65,
+      metalness: 0.05,
+      flatShading: false
+    });
+    const grassMesh = new THREE.Mesh(grassGeo, grassMat);
+    grassMesh.receiveShadow = true;
+    grassMesh.position.y = -0.3;
+    islandGroup.add(grassMesh);
+
+    // Smooth Earth Underside
+    const earthGeo = new THREE.CylinderGeometry(3.4, 0.4, 2.2, 36);
+    earthGeo.computeVertexNormals();
+    const earthMat = new THREE.MeshStandardMaterial({
+      color: 0x475569,
+      roughness: 0.85,
+      metalness: 0.1,
+      flatShading: false
+    });
+    const earthMesh = new THREE.Mesh(earthGeo, earthMat);
+    earthMesh.position.y = -1.6;
+    earthMesh.castShadow = true;
+    islandGroup.add(earthMesh);
+
+    // Smooth Low-Poly Organic Trees (with high segment smoothness)
+    function createSmoothTree(x, z, scale = 1) {
+      const tree = new THREE.Group();
+      const trunkMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.8, flatShading: false });
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12 * scale, 0.16 * scale, 0.7 * scale, 16), trunkMat);
+      trunk.position.y = 0.35 * scale;
+      trunk.castShadow = true;
+      tree.add(trunk);
+
+      const foliageMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.65, flatShading: false });
+      for (let i = 0; i < 3; i++) {
+        const tierGeo = new THREE.ConeGeometry((0.85 - i * 0.2) * scale, (0.75 - i * 0.1) * scale, 24);
+        tierGeo.computeVertexNormals();
+        const tier = new THREE.Mesh(tierGeo, foliageMat);
+        tier.position.y = (0.65 + i * 0.4) * scale;
+        tier.castShadow = true;
+        tree.add(tier);
+      }
+      tree.position.set(x, 0.02, z);
+      return tree;
+    }
+    islandGroup.add(createSmoothTree(-1.3, 0.6, 1.1));
+    islandGroup.add(createSmoothTree(-1.9, -0.5, 0.85));
+    islandGroup.add(createSmoothTree(1.6, 0.8, 1.05));
+    islandGroup.add(createSmoothTree(2.0, -0.4, 0.8));
+    islandGroup.add(createSmoothTree(0.1, -1.4, 1.2));
+
+    // Smooth Pebble Accents
+    function createSmoothPebble(x, z, radius) {
+      const pGeo = new THREE.SphereGeometry(radius, 20, 20);
+      pGeo.scale(1.2, 0.7, 1.0);
+      const pMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.6, flatShading: false });
+      const p = new THREE.Mesh(pGeo, pMat);
+      p.position.set(x, radius * 0.5, z);
+      p.castShadow = true;
+      return p;
+    }
+    islandGroup.add(createSmoothPebble(0.6, 1.2, 0.28));
+    islandGroup.add(createSmoothPebble(-0.7, 1.3, 0.22));
+
+    // B. Smooth Hero Sun System
+    const sunGroup = new THREE.Group();
+    sunGroup.position.set(2.8, 2.6, -1.0);
+    rootGroup.add(sunGroup);
+
+    // Glowing Golden Sphere with High Subdivision for Ultra-Smooth Edges
+    const sunCoreGeo = new THREE.SphereGeometry(1.05, 36, 36);
+    const sunCoreMat = new THREE.MeshStandardMaterial({
+      color: 0xfbbf24,
+      emissive: 0xf59e0b,
+      emissiveIntensity: 0.95,
+      roughness: 0.25,
+      metalness: 0.05
+    });
+    const sunCore = new THREE.Mesh(sunCoreGeo, sunCoreMat);
+    sunGroup.add(sunCore);
+
+    // Smooth Radiating Corona Halo
+    const coronaGroup = new THREE.Group();
+    sunGroup.add(coronaGroup);
+    const rayMat = new THREE.MeshStandardMaterial({
+      color: 0xfde047,
+      emissive: 0xf59e0b,
+      emissiveIntensity: 0.8,
+      roughness: 0.3,
+      flatShading: false
+    });
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2;
+      const rayGeo = new THREE.ConeGeometry(0.18, 0.75, 16);
+      rayGeo.computeVertexNormals();
+      const ray = new THREE.Mesh(rayGeo, rayMat);
+      ray.position.set(Math.cos(angle) * 1.4, Math.sin(angle) * 1.4, 0);
+      ray.rotation.z = angle - Math.PI / 2;
+      coronaGroup.add(ray);
+    }
+
+    // Outer Soft Glowing Aura
+    const sunHaloMat = new THREE.MeshBasicMaterial({
+      color: 0xfef08a,
+      transparent: true,
+      opacity: 0.28,
+      side: THREE.BackSide
+    });
+    const sunHalo = new THREE.Mesh(new THREE.SphereGeometry(1.65, 32, 32), sunHaloMat);
+    sunGroup.add(sunHalo);
+
+    // C. Smooth Lunar System (Night Mode)
+    const moonGroup = new THREE.Group();
+    moonGroup.position.set(-2.5, 2.7, -1.2);
+    moonGroup.visible = false;
+    rootGroup.add(moonGroup);
+
+    const moonCoreGeo = new THREE.SphereGeometry(0.9, 32, 32);
+    const moonCoreMat = new THREE.MeshStandardMaterial({
+      color: 0xe2e8f0,
+      emissive: 0x94a3b8,
+      emissiveIntensity: 0.35,
+      roughness: 0.6,
+      metalness: 0.05
+    });
+    const moonCore = new THREE.Mesh(moonCoreGeo, moonCoreMat);
+    moonGroup.add(moonCore);
+
+    const moonHaloMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.22,
+      side: THREE.BackSide
+    });
+    const moonHalo = new THREE.Mesh(new THREE.SphereGeometry(1.35, 32, 32), moonHaloMat);
+    moonGroup.add(moonHalo);
+
+    // D. Silky Smooth Volumetric Clouds (High-Subdivision Smooth Normals)
+    function createSmoothCloud(scale = 1, isDark = false) {
+      const cloud = new THREE.Group();
+      const cloudMat = new THREE.MeshStandardMaterial({
+        color: isDark ? 0x475569 : 0xffffff,
+        roughness: 0.88,
+        metalness: 0.02,
+        flatShading: false
+      });
+
+      // Fluffy overlapping spheres with 28 subdivisions for curvature smoothness
+      const puffs = [
+        [0, 0, 0, 0.82],
+        [0.7, 0.08, 0, 0.64],
+        [-0.7, 0.04, 0, 0.60],
+        [0.3, 0.42, 0.1, 0.58],
+        [-0.32, 0.38, -0.1, 0.54],
+        [0.1, -0.16, 0.32, 0.5],
+        [-0.15, -0.16, -0.28, 0.46]
+      ];
+
+      puffs.forEach(([px, py, pz, pr]) => {
+        const pGeo = new THREE.SphereGeometry(pr * scale, 28, 28);
+        pGeo.computeVertexNormals();
+        const puff = new THREE.Mesh(pGeo, cloudMat);
+        puff.position.set(px * scale, py * scale, pz * scale);
+        puff.castShadow = true;
+        cloud.add(puff);
+      });
+      return cloud;
+    }
+
+    const cloudsGroup = new THREE.Group();
+    rootGroup.add(cloudsGroup);
+
+    const cloud1 = createSmoothCloud(1.2, false);
+    cloud1.position.set(-1.8, 2.1, 0.9);
+    cloudsGroup.add(cloud1);
+
+    const cloud2 = createSmoothCloud(0.95, false);
+    cloud2.position.set(1.9, 1.8, -0.6);
+    cloudsGroup.add(cloud2);
+
+    const cloud3 = createSmoothCloud(1.35, false);
+    cloud3.position.set(0.1, 2.6, -1.4);
+    cloudsGroup.add(cloud3);
+
+    // E. Particles (Smooth Rain & Soft Snow)
+    // Rain
+    const rainCount = 280;
+    const rainGeo = new THREE.BufferGeometry();
+    const rainPositions = new Float32Array(rainCount * 3);
+    for (let i = 0; i < rainCount * 3; i += 3) {
+      rainPositions[i] = (Math.random() - 0.5) * 9;
+      rainPositions[i + 1] = Math.random() * 8;
+      rainPositions[i + 2] = (Math.random() - 0.5) * 9;
+    }
+    rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
+    const rainMat = new THREE.PointsMaterial({
+      color: 0x93c5fd,
+      size: 0.11,
+      transparent: true,
+      opacity: 0.8
+    });
+    const rainSystem = new THREE.Points(rainGeo, rainMat);
+    rainSystem.visible = false;
+    scene.add(rainSystem);
+
+    // Snow
+    const snowCount = 220;
+    const snowGeo = new THREE.BufferGeometry();
+    const snowPositions = new Float32Array(snowCount * 3);
+    for (let i = 0; i < snowCount * 3; i += 3) {
+      snowPositions[i] = (Math.random() - 0.5) * 9;
+      snowPositions[i + 1] = Math.random() * 8;
+      snowPositions[i + 2] = (Math.random() - 0.5) * 9;
+    }
+    snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPositions, 3));
+    const snowMat = new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: 0.16,
+      transparent: true,
+      opacity: 0.85
+    });
+    const snowSystem = new THREE.Points(snowGeo, snowMat);
+    snowSystem.visible = false;
+    scene.add(snowSystem);
+
+    // --- 4. Fixed View with Interactive Subtle Depth Parallax ---
+    // Instead of free-floating orbit, the camera stays FIXED at its hero framing,
+    // and subtle interactive touch/mouse tilting gives a tactile 3D depth feeling.
+    let targetTiltX = 0;
+    let targetTiltY = 0;
+    let currentTiltX = 0;
+    let currentTiltY = 0;
+
+    let isTouching = false;
+    let startTouchX = 0;
+    let startTouchY = 0;
+
+    container.addEventListener('pointerdown', (e) => {
+      isTouching = true;
+      startTouchX = e.clientX;
+      startTouchY = e.clientY;
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      if (!isTouching) return;
+      const dx = (e.clientX - startTouchX) / window.innerWidth;
+      const dy = (e.clientY - startTouchY) / window.innerHeight;
+      targetTiltY = dx * 0.45; // Max ~25 deg tilt
+      targetTiltX = dy * 0.35;
+    });
+
+    window.addEventListener('pointerup', () => {
+      isTouching = false;
+      targetTiltX = 0; // Spring back to fixed center view
+      targetTiltY = 0;
+    });
+
+    window.addEventListener('pointercancel', () => {
+      isTouching = false;
+      targetTiltX = 0;
+      targetTiltY = 0;
+    });
+
+    // Tap on 3D elements for punchy feedback
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    container.addEventListener('click', (e) => {
+      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+
+      const intersects = raycaster.intersectObjects(rootGroup.children, true);
+      if (intersects.length > 0) {
+        const obj = intersects[0].object;
+        obj.scale.multiplyScalar(1.22);
+        setTimeout(() => obj.scale.divideScalar(1.22), 160);
+
+        if (currentMode === 'storm') {
+          triggerLightning();
+        }
+      }
+    });
+
+    function triggerLightning() {
+      lightningLight.intensity = 4.2;
+      setTimeout(() => { lightningLight.intensity = 0.2; }, 50);
+      setTimeout(() => { lightningLight.intensity = 3.2; }, 100);
+      setTimeout(() => { lightningLight.intensity = 0; }, 170);
+    }
+
+    // --- 5. Weather Presets & Mode Switching ---
+    let currentMode = 'clear';
+
+    const presets = {
+      clear: {
+        hemiSky: 0xffffff,
+        hemiGround: 0x38bdf8,
+        dirColor: 0xffedd5,
+        dirIntensity: 1.45,
+        sun: true,
+        moon: false,
+        cloudDark: false,
+        rain: false,
+        snow: false,
+        grassColor: 0x22c55e,
+        title: "☀️ Smooth 3D Sunshine"
+      },
+      clouds: {
+        hemiSky: 0xe2e8f0,
+        hemiGround: 0x64748b,
+        dirColor: 0xfff7ed,
+        dirIntensity: 0.95,
+        sun: true,
+        moon: false,
+        cloudDark: false,
+        rain: false,
+        snow: false,
+        grassColor: 0x16a34a,
+        title: "⛅ Smooth 3D Clouds"
+      },
+      rain: {
+        hemiSky: 0x94a3b8,
+        hemiGround: 0x334155,
+        dirColor: 0x93c5fd,
+        dirIntensity: 0.6,
+        sun: false,
+        moon: false,
+        cloudDark: true,
+        rain: true,
+        snow: false,
+        grassColor: 0x15803d,
+        title: "🌧️ Smooth 3D Rain"
+      },
+      storm: {
+        hemiSky: 0x64748b,
+        hemiGround: 0x1e293b,
+        dirColor: 0x818cf8,
+        dirIntensity: 0.35,
+        sun: false,
+        moon: false,
+        cloudDark: true,
+        rain: true,
+        snow: false,
+        grassColor: 0x14532d,
+        title: "⛈️ Smooth 3D Storm"
+      },
+      snow: {
+        hemiSky: 0xf1f5f9,
+        hemiGround: 0x64748b,
+        dirColor: 0xffffff,
+        dirIntensity: 0.9,
+        sun: false,
+        moon: false,
+        cloudDark: false,
+        rain: false,
+        snow: true,
+        grassColor: 0xe2e8f0,
+        title: "❄️ Smooth 3D Snow"
+      },
+      night: {
+        hemiSky: 0x1e293b,
+        hemiGround: 0x0f172a,
+        dirColor: 0x7dd3fc,
+        dirIntensity: 0.8,
+        sun: false,
+        moon: true,
+        cloudDark: true,
+        rain: false,
+        snow: false,
+        grassColor: 0x1e3a1f,
+        title: "🌙 Smooth 3D Night"
+      }
+    };
+
+    function applyPreset(name) {
+      currentMode = name;
+      const p = presets[name] || presets.clear;
+
+      hemiLight.color.setHex(p.hemiSky);
+      hemiLight.groundColor.setHex(p.hemiGround);
+
+      dirLight.color.setHex(p.dirColor);
+      dirLight.intensity = p.dirIntensity;
+
+      sunGroup.visible = p.sun;
+      moonGroup.visible = p.moon;
+
+      grassMat.color.setHex(p.grassColor);
+
+      rainSystem.visible = p.rain;
+      snowSystem.visible = p.snow;
+
+      const cloudHex = p.cloudDark ? 0x475569 : 0xffffff;
+      cloudsGroup.children.forEach(cGroup => {
+        cGroup.children.forEach(mesh => {
+          if (mesh.material) mesh.material.color.setHex(cloudHex);
+        });
+      });
+
+      document.getElementById('badge-title').innerText = p.title;
+
+      document.querySelectorAll('.sim-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-mode') === name);
+      });
+    }
+
+    document.querySelectorAll('.sim-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        applyPreset(btn.getAttribute('data-mode'));
+      });
+    });
+
+    // External Bridge for Android Kotlin sync
+    window.setWeatherFromAndroid = function(weatherCode, isDay) {
+      if (!isDay) {
+        applyPreset('night');
+        return;
+      }
+      if (weatherCode <= 1) {
+        applyPreset('clear');
+      } else if (weatherCode <= 3) {
+        applyPreset('clouds');
+      } else if (weatherCode >= 51 && weatherCode <= 67 || weatherCode >= 80 && weatherCode <= 82) {
+        applyPreset('rain');
+      } else if (weatherCode >= 71 && weatherCode <= 77 || weatherCode >= 85 && weatherCode <= 86) {
+        applyPreset('snow');
+      } else if (weatherCode >= 95) {
+        applyPreset('storm');
+      } else {
+        applyPreset('clouds');
+      }
+    };
+
+    // --- 6. 60fps Animation Loop with Natural Drift & Smooth Fixed View Spring ---
+    const clock = new THREE.Clock();
+    let nextLightning = 3.5;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+      const time = clock.getElapsedTime();
+
+      // Smooth Spring Interpolation for Fixed View Parallax
+      currentTiltX += (targetTiltX - currentTiltX) * 0.1;
+      currentTiltY += (targetTiltY - currentTiltY) * 0.1;
+
+      // Natural idle float + user tilt
+      rootGroup.rotation.y = currentTiltY + Math.sin(time * 0.35) * 0.05;
+      rootGroup.rotation.x = currentTiltX + Math.cos(time * 0.4) * 0.03;
+
+      // Island gentle float
+      islandGroup.position.y = Math.sin(time * 0.7) * 0.08;
+
+      // Sun subtle breathing & corona spin
+      if (sunGroup.visible) {
+        sunGroup.position.y = 2.6 + Math.sin(time * 1.1) * 0.1;
+        coronaGroup.rotation.z = time * 0.35;
+        const pulse = 1.0 + Math.sin(time * 2.2) * 0.04;
+        sunCore.scale.set(pulse, pulse, pulse);
+      }
+
+      // Moon float
+      if (moonGroup.visible) {
+        moonGroup.position.y = 2.7 + Math.sin(time * 0.8) * 0.08;
+      }
+
+      // Volumetric Cloud Floating
+      cloud1.position.x = -1.8 + Math.sin(time * 0.45) * 0.25;
+      cloud2.position.x = 1.9 + Math.cos(time * 0.5) * 0.22;
+      cloud3.position.z = -1.4 + Math.sin(time * 0.35) * 0.2;
+
+      // Rain animation
+      if (rainSystem.visible) {
+        const positions = rainGeo.attributes.position.array;
+        for (let i = 1; i < rainPositions.length; i += 3) {
+          positions[i] -= 14 * delta;
+          if (positions[i] < -1.8) positions[i] = 7.0;
+        }
+        rainGeo.attributes.position.needsUpdate = true;
+      }
+
+      // Snow animation
+      if (snowSystem.visible) {
+        const positions = snowGeo.attributes.position.array;
+        for (let i = 0; i < snowPositions.length; i += 3) {
+          positions[i] += Math.sin(time + i) * 0.012;
+          positions[i + 1] -= 2.8 * delta;
+          if (positions[i + 1] < -1.8) positions[i + 1] = 7.0;
+        }
+        snowGeo.attributes.position.needsUpdate = true;
+      }
+
+      // Storm random flashes
+      if (currentMode === 'storm') {
+        nextLightning -= delta;
+        if (nextLightning <= 0) {
+          triggerLightning();
+          nextLightning = 3.0 + Math.random() * 3.5;
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    applyPreset('clear');
+    animate();
+  </script>
+</body>
+</html>
