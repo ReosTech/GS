@@ -11,10 +11,10 @@ import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -23,6 +23,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
@@ -265,150 +269,19 @@ fun WeatherScreen(
     )
   }
 
-  Column(
+  val scrollState = rememberScrollState()
+
+  BoxWithConstraints(
     modifier = modifier
       .fillMaxSize()
       .background(MaterialTheme.colorScheme.background)
-      .verticalScroll(rememberScrollState())
-      .padding(horizontal = 16.dp, vertical = 12.dp),
-    verticalArrangement = Arrangement.spacedBy(16.dp)
   ) {
-    // Top Search Row with Live Location & Push Notification Actions
-    Row(
-      modifier = Modifier.fillMaxWidth(),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-      OutlinedTextField(
-        value = searchQuery,
-        onValueChange = { searchQuery = it },
-        modifier = Modifier
-          .weight(1f)
-          .testTag("weather_search_input"),
-        placeholder = { Text("Search city (e.g. London, Tokyo)...", fontSize = 13.sp) },
-        leadingIcon = {
-          Icon(Icons.Default.Search, contentDescription = "Search", tint = MaterialTheme.colorScheme.primary)
-        },
-        trailingIcon = {
-          if (searchQuery.isNotBlank()) {
-            IconButton(
-              onClick = {
-                keyboardController?.hide()
-                loadWeather(searchQuery)
-                searchQuery = ""
-              },
-              modifier = Modifier.testTag("weather_search_submit")
-            ) {
-              Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Go", tint = MaterialTheme.colorScheme.primary)
-            }
-          }
-        },
-        singleLine = true,
-        shape = RoundedCornerShape(24.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-          focusedBorderColor = MaterialTheme.colorScheme.primary,
-          unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-          focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-          unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer
-        ),
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = {
-          if (searchQuery.isNotBlank()) {
-            keyboardController?.hide()
-            loadWeather(searchQuery)
-            searchQuery = ""
-          }
-        })
-      )
-
-      // Live Location Button (Opens Location Dialog with Approximate & Precise choices)
-      FilledTonalIconButton(
-        onClick = { showLocationDialog = true },
-        modifier = Modifier
-          .size(48.dp)
-          .testTag("weather_live_location_button")
-      ) {
-        Icon(
-          imageVector = if (weatherData?.isLiveLocation == true) Icons.Default.MyLocation else Icons.Default.LocationOn,
-          contentDescription = "Use Live Location",
-          tint = if (weatherData?.isLiveLocation == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-        )
-      }
-
-      // Push Notification Button for AI Weather
-      FilledTonalIconButton(
-        onClick = { triggerWeatherNotification() },
-        modifier = Modifier
-          .size(48.dp)
-          .testTag("weather_push_notification_button")
-      ) {
-        Icon(
-          imageVector = Icons.Default.NotificationsActive,
-          contentDescription = "Send Weather Push Notification",
-          tint = MaterialTheme.colorScheme.tertiary
-        )
-      }
-    }
-
-    // Notification toast indicator if triggered
-    if (notificationSentMessage != null) {
-      Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
-        modifier = Modifier.fillMaxWidth()
-      ) {
-        Row(
-          modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-          ) {
-            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
-            Text(
-              text = notificationSentMessage ?: "",
-              fontSize = 12.sp,
-              color = MaterialTheme.colorScheme.onTertiaryContainer,
-              fontWeight = FontWeight.Medium
-            )
-          }
-          IconButton(onClick = { notificationSentMessage = null }, modifier = Modifier.size(24.dp)) {
-            Icon(Icons.Default.Close, contentDescription = "Close", modifier = Modifier.size(16.dp))
-          }
-        }
-      }
-    }
-
-    // Popular City Chips
-    Row(
-      modifier = Modifier
-        .fillMaxWidth()
-        .horizontalScroll(rememberScrollState()),
-      horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-      popularCities.forEach { city ->
-        val isSelected = selectedCity.startsWith(city, ignoreCase = true) && weatherData?.isLiveLocation != true
-        FilterChip(
-          selected = isSelected,
-          onClick = { loadWeather(city) },
-          label = { Text(city, fontSize = 12.sp) },
-          colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-          ),
-          shape = RoundedCornerShape(16.dp)
-        )
-      }
-    }
+    val viewportHeight = maxHeight
 
     // Main Weather Content State
     if (isLoading) {
       Box(
-        modifier = Modifier
-          .fillMaxWidth()
-          .height(280.dp),
+        modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
       ) {
         Column(
@@ -420,358 +293,530 @@ fun WeatherScreen(
         }
       }
     } else if (errorMessage != null) {
-      Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+      Box(
+        modifier = Modifier
+          .fillMaxSize()
+          .padding(24.dp),
+        contentAlignment = Alignment.Center
       ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          Text("Weather Information Unavailable", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer)
-          Text(errorMessage ?: "", fontSize = 13.sp, color = MaterialTheme.colorScheme.onErrorContainer)
-          Button(onClick = { loadWeather(selectedCity) }) {
-            Text("Retry")
+        Card(
+          modifier = Modifier.fillMaxWidth(),
+          colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+        ) {
+          Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Weather Information Unavailable", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer)
+            Text(errorMessage ?: "", fontSize = 13.sp, color = MaterialTheme.colorScheme.onErrorContainer)
+            Button(onClick = { loadWeather(selectedCity) }) {
+              Text("Retry")
+            }
           }
         }
       }
     } else weatherData?.let { data ->
-      // Primary Hero Card
-      Card(
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(
-          containerColor = if (data.isDay) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-          else MaterialTheme.colorScheme.surfaceVariant
-        ),
+      val scrollOffset = scrollState.value.toFloat()
+      // Disappear factor: as user scrolls down, hero 3D and temp window smoothly disappears
+      val fadeDistance = 380f
+      val heroAlpha = (1f - (scrollOffset / fadeDistance)).coerceIn(0f, 1f)
+      val heroScale = 0.94f + 0.06f * heroAlpha
+
+      Column(
         modifier = Modifier
-          .fillMaxWidth()
-          .testTag("weather_hero_card")
+          .fillMaxSize()
+          .verticalScroll(scrollState)
       ) {
+        // --- 1. HERO SECTION: TEMP BAR ABOVE & 3D VIEW BELOW (Fades out when scrolled down) ---
         Column(
           modifier = Modifier
             .fillMaxWidth()
-            .padding(20.dp),
-          verticalArrangement = Arrangement.spacedBy(12.dp)
+            .heightIn(min = viewportHeight)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .graphicsLayer {
+              alpha = heroAlpha
+              scaleX = heroScale
+              scaleY = heroScale
+            }
+            .testTag("fullscreen_3d_temp_window"),
+          verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-          // Location Header & Live Accuracy Badge
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Column(modifier = Modifier.weight(1f)) {
-              Text(
-                text = data.cityName,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+          // Top Section: Search Bar, Notifications, & City Chips
+          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Top Search Row with Live Location & Push Notification Actions
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier
+                  .weight(1f)
+                  .testTag("weather_search_input"),
+                placeholder = { Text("Search city (e.g. London, Tokyo)...", fontSize = 13.sp) },
+                leadingIcon = {
+                  Icon(Icons.Default.Search, contentDescription = "Search", tint = MaterialTheme.colorScheme.primary)
+                },
+                trailingIcon = {
+                  if (searchQuery.isNotBlank()) {
+                    IconButton(
+                      onClick = {
+                        keyboardController?.hide()
+                        loadWeather(searchQuery)
+                        searchQuery = ""
+                      },
+                      modifier = Modifier.testTag("weather_search_submit")
+                    ) {
+                      Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Go", tint = MaterialTheme.colorScheme.primary)
+                    }
+                  }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(24.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                  focusedBorderColor = MaterialTheme.colorScheme.primary,
+                  unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                  focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                  unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer
+                ),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = {
+                  if (searchQuery.isNotBlank()) {
+                    keyboardController?.hide()
+                    loadWeather(searchQuery)
+                    searchQuery = ""
+                  }
+                })
               )
-              if (data.isLiveLocation) {
-                Row(
-                  verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.spacedBy(4.dp),
-                  modifier = Modifier.padding(top = 2.dp)
-                ) {
-                  Icon(
-                    imageVector = if (data.isPreciseLocation) Icons.Default.GpsFixed else Icons.Default.NearMe,
-                    contentDescription = null,
-                    tint = if (data.isPreciseLocation) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.size(13.dp)
-                  )
-                  Text(
-                    text = if (data.isPreciseLocation) "Live GPS • Precise (±${data.accuracyMeters.toInt()}m)"
-                    else "Live Area • Approximate (±${(data.accuracyMeters / 1000).toInt()}km)",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (data.isPreciseLocation) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
-                  )
-                }
-              } else {
-                Text(
-                  text = "Station: ${String.format(Locale.US, "%.2f°, %.2f°", data.latitude, data.longitude)}",
-                  fontSize = 11.sp,
-                  color = MaterialTheme.colorScheme.outline
+
+              // Live Location Button (Opens Location Dialog with Approximate & Precise choices)
+              FilledTonalIconButton(
+                onClick = { showLocationDialog = true },
+                modifier = Modifier
+                  .size(48.dp)
+                  .testTag("weather_live_location_button")
+              ) {
+                Icon(
+                  imageVector = if (weatherData?.isLiveLocation == true) Icons.Default.MyLocation else Icons.Default.LocationOn,
+                  contentDescription = "Use Live Location",
+                  tint = if (weatherData?.isLiveLocation == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
+
+              // Push Notification Button for AI Weather
+              FilledTonalIconButton(
+                onClick = { triggerWeatherNotification() },
+                modifier = Modifier
+                  .size(48.dp)
+                  .testTag("weather_push_notification_button")
+              ) {
+                Icon(
+                  imageVector = Icons.Default.NotificationsActive,
+                  contentDescription = "Send Weather Push Notification",
+                  tint = MaterialTheme.colorScheme.tertiary
                 )
               }
             }
 
-            // Weather Icon
-            Box(
-              modifier = Modifier
-                .size(52.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)),
-              contentAlignment = Alignment.Center
-            ) {
-              val icon = when {
-                data.weatherCode in 0..1 -> if (data.isDay) Icons.Default.WbSunny else Icons.Default.NightlightRound
-                data.weatherCode in 2..3 -> Icons.Default.Cloud
-                data.weatherCode in 45..48 -> Icons.Default.BlurOn
-                data.weatherCode in 51..67 || data.weatherCode in 80..82 -> Icons.Default.WaterDrop
-                data.weatherCode in 71..77 || data.weatherCode in 85..86 -> Icons.Default.AcUnit
-                data.weatherCode >= 95 -> Icons.Default.Thunderstorm
-                else -> Icons.Default.CloudQueue
+            // Notification toast indicator if triggered
+            if (notificationSentMessage != null) {
+              Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+                modifier = Modifier.fillMaxWidth()
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                  Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                  ) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
+                    Text(
+                      text = notificationSentMessage ?: "",
+                      fontSize = 12.sp,
+                      color = MaterialTheme.colorScheme.onTertiaryContainer,
+                      fontWeight = FontWeight.Medium
+                    )
+                  }
+                  IconButton(onClick = { notificationSentMessage = null }, modifier = Modifier.size(24.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "Close", modifier = Modifier.size(16.dp))
+                  }
+                }
               }
-              Icon(
-                imageVector = icon,
-                contentDescription = data.weatherDesc,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp)
-              )
             }
-          }
 
-          // Large Temperature & Condition
-          Row(
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-          ) {
-            Text(
-              text = "${data.currentTemp.toInt()}°",
-              fontSize = 52.sp,
-              fontWeight = FontWeight.ExtraBold,
-              color = MaterialTheme.colorScheme.onSurface
-            )
-            Column(modifier = Modifier.padding(bottom = 8.dp)) {
-              Text(
-                text = data.weatherDesc,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-              )
-              Text(
-                text = "Feels like ${data.apparentTemp.toInt()}°",
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-              )
-            }
-          }
-
-          // Smooth 3D Weather Elements (Positioned directly under the Temperature)
-          SmoothWeather3DView(
-            weatherCode = data.weatherCode,
-            isDay = data.isDay,
-            modifier = Modifier
-              .fillMaxWidth()
-              .height(200.dp)
-              .clip(RoundedCornerShape(20.dp))
-          )
-
-          // Quick Highlights Pill Row
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-          ) {
-            WeatherStatItem(
-              icon = Icons.Default.WaterDrop,
-              label = "Humidity",
-              value = "${data.humidity}%"
-            )
-            WeatherStatItem(
-              icon = Icons.Default.Air,
-              label = "Wind",
-              value = "${data.windSpeed.toInt()} km/h"
-            )
-            WeatherStatItem(
-              icon = Icons.Default.WbSunny,
-              label = "UV Index",
-              value = String.format(Locale.US, "%.1f", data.uvIndex)
-            )
-            WeatherStatItem(
-              icon = Icons.Default.Compress,
-              label = "Pressure",
-              value = "${data.surfacePressure.toInt()} hPa"
-            )
-          }
-        }
-      }
-
-      // Detailed Atmospheric Metrics Grid
-      Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        modifier = Modifier.fillMaxWidth()
-      ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-          Text(
-            text = "Accurate Atmospheric Readings",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-          )
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-          ) {
-            Column(modifier = Modifier.weight(1f)) {
-              Text("Wind Direction", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
-              Text("${data.windDirection}° (${getWindDirectionName(data.windDirection)})", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            }
-            Column(modifier = Modifier.weight(1f)) {
-              Text("Peak Gusts", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
-              Text("${data.windGusts.toInt()} km/h", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            }
-          }
-          HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-          ) {
-            Column(modifier = Modifier.weight(1f)) {
-              Text("Sunrise", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
-              Text(data.sunrise, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            }
-            Column(modifier = Modifier.weight(1f)) {
-              Text("Sunset", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
-              Text(data.sunset, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            }
-          }
-        }
-      }
-
-      // Hourly Forecast with Precipitation Probability
-      Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        modifier = Modifier.fillMaxWidth()
-      ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Text("Hourly Outlook & Rain Probability", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            Text("Next 24h", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
-          }
-
-          Row(
-            modifier = Modifier
-              .fillMaxWidth()
-              .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-          ) {
-            data.hourlyForecast.forEach { item ->
-              HourlyItemCard(item)
-            }
-          }
-        }
-      }
-
-      // 7-Day Forecast
-      Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        modifier = Modifier.fillMaxWidth()
-      ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-          Text("7-Day Accurate Outlook", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-          data.dailyForecast.forEach { item ->
+            // Popular City Chips
             Row(
               modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp),
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.SpaceBetween
+                .horizontalScroll(rememberScrollState()),
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-              Text(item.dayName, modifier = Modifier.width(64.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium)
-              Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (item.precipProbMax > 20) {
-                  Icon(Icons.Default.WaterDrop, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(12.dp))
-                  Text("${item.precipProbMax}%", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
-                }
-              }
-              Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-              ) {
-                Text("${item.maxTemp.toInt()}°", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Text("${item.minTemp.toInt()}°", color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
+              popularCities.forEach { city ->
+                val isSelected = selectedCity.startsWith(city, ignoreCase = true) && weatherData?.isLiveLocation != true
+                FilterChip(
+                  selected = isSelected,
+                  onClick = { loadWeather(city) },
+                  label = { Text(city, fontSize = 12.sp) },
+                  colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    containerColor = MaterialTheme.colorScheme.surface
+                  ),
+                  shape = RoundedCornerShape(16.dp)
+                )
               }
             }
           }
-        }
-      }
 
-      // Gemini AI Meteorologist Advisor Card
-      Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)),
-        modifier = Modifier
-          .fillMaxWidth()
-          .testTag("weather_ai_advisor_card")
-      ) {
+          // UNIFIED HERO WINDOW: Temp bar above & 3D view below in the SAME WINDOW
+          DynamicTemperatureHud(
+            data = data,
+            onTriggerNotification = { triggerWeatherNotification() }
+          )
+
+          // Bottom Section: Animated Scroll Down Indicator
+          Column(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(top = 4.dp, bottom = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+          ) {
+            val infiniteTransition = rememberInfiniteTransition(label = "bounce")
+            val bounceOffsetY by infiniteTransition.animateFloat(
+              initialValue = 0f,
+              targetValue = 6f,
+              animationSpec = infiniteRepeatable(
+                animation = tween(800, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+              ),
+              label = "bounce"
+            )
+            Row(
+              modifier = Modifier.graphicsLayer { translationY = bounceOffsetY },
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+              Text(
+                "Scroll down for detailed forecast & other info",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+              )
+              Icon(
+                Icons.Default.KeyboardArrowDown,
+                contentDescription = "Scroll down",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp)
+              )
+            }
+          }
+        }
+
+        // --- 2. OTHER INFO SECTION (Appears seamlessly when scrolled down) ---
         Column(
-          modifier = Modifier.padding(18.dp),
-          verticalArrangement = Arrangement.spacedBy(12.dp)
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 16.dp)
+            .testTag("weather_other_info_section"),
+          verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+          // Section header with quick return to 3D View
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-              Icon(
-                imageVector = Icons.Default.AutoAwesome,
-                contentDescription = "AI",
-                tint = MaterialTheme.colorScheme.tertiary,
-                modifier = Modifier.size(20.dp)
-              )
-              Text(
-                text = "AI Meteorologist Advice",
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
-                color = MaterialTheme.colorScheme.onTertiaryContainer
-              )
-            }
-
-            // Notification button right in AI Card
-            FilledTonalButton(
-              onClick = { triggerWeatherNotification() },
-              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-              modifier = Modifier.height(32.dp)
-            ) {
-              Icon(Icons.Default.Notifications, contentDescription = null, modifier = Modifier.size(14.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("Notify", fontSize = 11.sp)
-            }
-          }
-
-          if (aiWeatherAdvice != null) {
-            AiMarkdownView(
-              content = aiWeatherAdvice ?: "",
-              textColor = MaterialTheme.colorScheme.onTertiaryContainer,
-              modifier = Modifier.fillMaxWidth()
-            )
-          } else {
             Text(
-              text = "Get real-time AI outfit recommendations, activity advice, and meteorological insights customized to ${data.cityName}'s live atmosphere.",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+              "Detailed Forecast & Readings",
+              style = MaterialTheme.typography.titleMedium,
+              fontWeight = FontWeight.Bold,
+              color = MaterialTheme.colorScheme.onSurface
             )
+            FilledTonalButton(
+              onClick = { coroutineScope.launch { scrollState.animateScrollTo(0) } },
+              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+              shape = RoundedCornerShape(14.dp),
+              modifier = Modifier.height(30.dp)
+            ) {
+              Icon(Icons.Default.KeyboardArrowUp, contentDescription = null, modifier = Modifier.size(14.dp))
+              Spacer(Modifier.width(4.dp))
+              Text("3D View", fontSize = 11.sp)
+            }
           }
 
-          Button(
-            onClick = { requestAiAdvice(data) },
-            enabled = !isAiAdviceLoading,
-            shape = RoundedCornerShape(16.dp),
+          // Atmospheric Metrics Highlights Card
+          Card(
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
             modifier = Modifier.fillMaxWidth()
           ) {
-            if (isAiAdviceLoading) {
-              CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
-              Spacer(modifier = Modifier.width(8.dp))
-              Text("Analyzing atmosphere...")
-            } else {
-              Icon(Icons.Default.Psychology, contentDescription = null, modifier = Modifier.size(18.dp))
-              Spacer(modifier = Modifier.width(6.dp))
-              Text(if (aiWeatherAdvice == null) "Ask AI Meteorologist" else "Refresh AI Insights")
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp, horizontal = 12.dp),
+              horizontalArrangement = Arrangement.SpaceAround
+            ) {
+              WeatherStatItem(Icons.Default.WaterDrop, "Humidity", "${data.humidity}%")
+              WeatherStatItem(Icons.Default.Air, "Wind", "${data.windSpeed.toInt()} km/h")
+              WeatherStatItem(Icons.Default.WbSunny, "UV Index", String.format(Locale.US, "%.1f", data.uvIndex))
+              WeatherStatItem(Icons.Default.Compress, "Pressure", "${data.surfacePressure.toInt()} hPa")
+            }
+          }
+
+          // Detailed Atmospheric Metrics Grid
+          Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+              Text(
+                text = "Accurate Atmospheric Readings",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+              )
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                Column(modifier = Modifier.weight(1f)) {
+                  Text("Wind Direction", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                  Text("${data.windDirection}° (${getWindDirectionName(data.windDirection)})", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                  Text("Peak Gusts", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                  Text("${data.windGusts.toInt()} km/h", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                }
+              }
+              HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                Column(modifier = Modifier.weight(1f)) {
+                  Text("Sunrise", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                  Text(data.sunrise, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                  Text("Sunset", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                  Text(data.sunset, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                }
+              }
+            }
+          }
+
+          // Hourly Forecast with Precipitation Probability
+          Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Text("Hourly Outlook & Rain Probability", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text("Next 24h", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+              }
+
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+              ) {
+                data.hourlyForecast.forEach { item ->
+                  HourlyItemCard(item)
+                }
+              }
+            }
+          }
+
+          // 7-Day Forecast
+          Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+              Text("7-Day Accurate Outlook", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+              data.dailyForecast.forEach { item ->
+                Row(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                  Text(item.dayName, modifier = Modifier.width(64.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                  Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (item.precipProbMax > 20) {
+                      Icon(Icons.Default.WaterDrop, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(12.dp))
+                      Text("${item.precipProbMax}%", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                    }
+                  }
+                  Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                  ) {
+                    Text("${item.maxTemp.toInt()}°", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text("${item.minTemp.toInt()}°", color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
+                  }
+                }
+              }
+            }
+          }
+
+          // Gemini AI Meteorologist Advisor Card
+          Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)),
+            modifier = Modifier
+              .fillMaxWidth()
+              .testTag("weather_ai_advisor_card")
+          ) {
+            Column(
+              modifier = Modifier.padding(18.dp),
+              verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                  Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = "AI",
+                    tint = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.size(20.dp)
+                  )
+                  Text(
+                    text = "AI Meteorologist Advice",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                  )
+                }
+
+                // Notification button right in AI Card
+                FilledTonalButton(
+                  onClick = { triggerWeatherNotification() },
+                  contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                  modifier = Modifier.height(32.dp)
+                ) {
+                  Icon(Icons.Default.Notifications, contentDescription = null, modifier = Modifier.size(14.dp))
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Text("Notify", fontSize = 11.sp)
+                }
+              }
+
+              if (aiWeatherAdvice != null) {
+                AiMarkdownView(
+                  content = aiWeatherAdvice ?: "",
+                  textColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                  modifier = Modifier.fillMaxWidth()
+                )
+              } else {
+                Text(
+                  text = "Get real-time AI outfit recommendations, activity advice, and meteorological insights customized to ${data.cityName}'s live atmosphere.",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+                )
+              }
+
+              Button(
+                onClick = { requestAiAdvice(data) },
+                enabled = !isAiAdviceLoading,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+              ) {
+                if (isAiAdviceLoading) {
+                  CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                  Spacer(modifier = Modifier.width(8.dp))
+                  Text("Analyzing atmosphere...")
+                } else {
+                  Icon(Icons.Default.Psychology, contentDescription = null, modifier = Modifier.size(18.dp))
+                  Spacer(modifier = Modifier.width(6.dp))
+                  Text(if (aiWeatherAdvice == null) "Ask AI Meteorologist" else "Refresh AI Insights")
+                }
+              }
+            }
+          }
+
+          // Bottom clearance for floating bubble dock
+          Spacer(Modifier.height(100.dp))
+        }
+      }
+
+      // --- 3. STICKY COMPACT TOP BAR (Appears when scrolled down so city/temp info is always visible) ---
+      AnimatedVisibility(
+        visible = scrollState.value > 380,
+        enter = fadeIn() + slideInVertically { -it },
+        exit = fadeOut() + slideOutVertically { -it },
+        modifier = Modifier.align(Alignment.TopCenter)
+      ) {
+        Surface(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+          shape = RoundedCornerShape(24.dp),
+          color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.94f),
+          border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+          shadowElevation = 8.dp
+        ) {
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+              Icon(
+                imageVector = when {
+                  data.weatherCode in 0..1 -> if (data.isDay) Icons.Default.WbSunny else Icons.Default.NightlightRound
+                  data.weatherCode in 2..3 -> Icons.Default.Cloud
+                  data.weatherCode in 51..67 || data.weatherCode in 80..82 -> Icons.Default.WaterDrop
+                  data.weatherCode >= 95 -> Icons.Default.Thunderstorm
+                  else -> Icons.Default.CloudQueue
+                },
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+              )
+              Column {
+                Text(data.cityName, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text("${data.currentTemp.toInt()}°C • ${data.weatherDesc}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              }
+            }
+            FilledTonalButton(
+              onClick = { coroutineScope.launch { scrollState.animateScrollTo(0) } },
+              contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+              shape = RoundedCornerShape(16.dp)
+            ) {
+              Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Back to 3D", modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("3D View", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             }
           }
         }
       }
-
-      // Bottom clearance for floating bubble dock
-      Spacer(Modifier.height(88.dp))
     }
   }
 }
@@ -829,31 +874,329 @@ fun HourlyItemCard(item: AiService.HourlyWeather) {
   }
 }
 
+@Composable
+fun DynamicTemperatureHud(
+  data: AiService.WeatherData,
+  onTriggerNotification: () -> Unit,
+  modifier: Modifier = Modifier
+) {
+  val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+  val pulseAlpha by infiniteTransition.animateFloat(
+    initialValue = 0.35f,
+    targetValue = 1.0f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(1100, easing = LinearEasing),
+      repeatMode = RepeatMode.Reverse
+    ),
+    label = "pulseAlpha"
+  )
+
+  // Dynamic Theme Accent based on Temperature
+  val tempColor = when {
+    data.currentTemp >= 26.0 -> Color(0xFFF59E0B) // Radiant Warm Amber / Orange
+    data.currentTemp in 16.0..25.9 -> Color(0xFF10B981) // Pleasant Emerald / Mint
+    else -> Color(0xFF38BDF8) // Crisp Alpine Cyan / Sky
+  }
+
+  val dynamicAtmosphere = when {
+    data.currentTemp >= 28.0 -> "Hot & Radiant Sunshine"
+    data.currentTemp >= 22.0 && data.windSpeed < 15.0 -> "Warm & Pleasant Calm"
+    data.currentTemp >= 20.0 && data.windSpeed >= 15.0 -> "Warm & Breezy Atmosphere"
+    data.currentTemp in 12.0..19.9 && data.windSpeed >= 18.0 -> "Cool & Brisk Winds"
+    data.currentTemp in 10.0..19.9 -> "Mild & Refreshing Air"
+    data.currentTemp in 1.0..9.9 -> "Chilly & Crisp Climate"
+    data.currentTemp <= 0.0 -> "Freezing Sub-Zero Frost"
+    else -> data.weatherDesc
+  }
+
+  // Floating Glassmorphic HUD Container
+  Surface(
+    modifier = modifier
+      .fillMaxWidth()
+      .testTag("dynamic_temperature_hud"),
+    shape = RoundedCornerShape(28.dp),
+    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.76f),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+    tonalElevation = 6.dp,
+    shadowElevation = 8.dp
+  ) {
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 20.dp, vertical = 18.dp),
+      verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+      // Header: Location Name & Live Accuracy Status
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Column(modifier = Modifier.weight(1f)) {
+          Text(
+            text = data.cityName,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+          )
+          if (data.isLiveLocation) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(4.dp),
+              modifier = Modifier.padding(top = 2.dp)
+            ) {
+              Icon(
+                imageVector = if (data.isPreciseLocation) Icons.Default.GpsFixed else Icons.Default.NearMe,
+                contentDescription = null,
+                tint = if (data.isPreciseLocation) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.size(13.dp)
+              )
+              Text(
+                text = if (data.isPreciseLocation) "Live GPS • Precise (±${data.accuracyMeters.toInt()}m)"
+                else "Live Area • Approximate (±${(data.accuracyMeters / 1000).toInt()}km)",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (data.isPreciseLocation) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+              )
+            }
+          } else {
+            Text(
+              text = "Live Station: ${String.format(Locale.US, "%.2f°, %.2f°", data.latitude, data.longitude)}",
+              fontSize = 11.sp,
+              color = MaterialTheme.colorScheme.outline
+            )
+          }
+        }
+
+        // Weather Condition Icon Badge
+        Box(
+          modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(tempColor.copy(alpha = 0.16f)),
+          contentAlignment = Alignment.Center
+        ) {
+          val icon = when {
+            data.weatherCode in 0..1 -> if (data.isDay) Icons.Default.WbSunny else Icons.Default.NightlightRound
+            data.weatherCode in 2..3 -> Icons.Default.Cloud
+            data.weatherCode in 45..48 -> Icons.Default.BlurOn
+            data.weatherCode in 51..67 || data.weatherCode in 80..82 -> Icons.Default.WaterDrop
+            data.weatherCode in 71..77 || data.weatherCode in 85..86 -> Icons.Default.AcUnit
+            data.weatherCode >= 95 -> Icons.Default.Thunderstorm
+            else -> Icons.Default.CloudQueue
+          }
+          Icon(
+            imageVector = icon,
+            contentDescription = data.weatherDesc,
+            tint = tempColor,
+            modifier = Modifier.size(28.dp)
+          )
+        }
+      }
+
+      // Middle: Big Bold Dynamic Temperature & Status
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+      ) {
+        Row(
+          verticalAlignment = Alignment.Bottom,
+          horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+          Text(
+            text = "${data.currentTemp.toInt()}°",
+            fontSize = 64.sp,
+            fontWeight = FontWeight.Black,
+            color = tempColor,
+            lineHeight = 64.sp
+          )
+          Column(modifier = Modifier.padding(bottom = 6.dp)) {
+            Text(
+              text = data.weatherDesc,
+              fontSize = 18.sp,
+              fontWeight = FontWeight.Bold,
+              color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+              text = "Feels like ${data.apparentTemp.toInt()}°C",
+              fontSize = 13.sp,
+              fontWeight = FontWeight.Medium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          }
+        }
+
+        // High / Low summary chip
+        val todayForecast = data.dailyForecast.firstOrNull()
+        if (todayForecast != null) {
+          Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+          ) {
+            Column(
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+              horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+              Text("H: ${todayForecast.maxTemp.toInt()}°", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+              Text("L: ${todayForecast.minTemp.toInt()}°", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+            }
+          }
+        }
+      }
+
+      // Atmospheric Status Dynamic Pill
+      Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = tempColor.copy(alpha = 0.12f),
+        border = BorderStroke(1.dp, tempColor.copy(alpha = 0.35f))
+      ) {
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            Box(
+              modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(tempColor.copy(alpha = pulseAlpha))
+            )
+            Text(
+              text = dynamicAtmosphere,
+              fontSize = 12.sp,
+              fontWeight = FontWeight.SemiBold,
+              color = MaterialTheme.colorScheme.onSurface
+            )
+          }
+
+          Text(
+            text = "Wind ${data.windSpeed.toInt()} km/h",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Medium
+          )
+        }
+      }
+
+      // 3D Weather View (Unified inside the SAME window, directly below the temperature bar)
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(210.dp)
+          .clip(RoundedCornerShape(20.dp))
+          .background(
+            if (data.isDay) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.28f)
+            else MaterialTheme.colorScheme.surfaceContainer
+          )
+          .testTag("weather_3d_embedded_view")
+      ) {
+        SmoothWeather3DView(
+          weatherCode = data.weatherCode,
+          isDay = data.isDay,
+          currentTemp = data.currentTemp,
+          windSpeed = data.windSpeed,
+          modifier = Modifier.fillMaxSize()
+        )
+
+        // Interactive Caption Pill in top corner of 3D frame
+        Surface(
+          shape = RoundedCornerShape(12.dp),
+          color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+          border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+          modifier = Modifier
+            .align(Alignment.TopEnd)
+            .padding(8.dp)
+        ) {
+          Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
+            Icon(
+              Icons.Default.TouchApp,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.size(11.dp)
+            )
+            Text(
+              "3D Scene • Drag to tilt",
+              fontSize = 10.sp,
+              fontWeight = FontWeight.Medium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          }
+        }
+      }
+
+      // Quick Glance Metrics Row
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+      ) {
+        WeatherStatItem(
+          icon = Icons.Default.WaterDrop,
+          label = "Humidity",
+          value = "${data.humidity}%"
+        )
+        WeatherStatItem(
+          icon = Icons.Default.Air,
+          label = "Wind",
+          value = "${data.windSpeed.toInt()} km/h"
+        )
+        WeatherStatItem(
+          icon = Icons.Default.WbSunny,
+          label = "UV Index",
+          value = String.format(Locale.US, "%.1f", data.uvIndex)
+        )
+        WeatherStatItem(
+          icon = Icons.Default.Compress,
+          label = "Pressure",
+          value = "${data.surfacePressure.toInt()} hPa"
+        )
+      }
+    }
+  }
+}
+
 @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
 @Composable
 fun SmoothWeather3DView(
   weatherCode: Int,
   isDay: Boolean,
-  modifier: Modifier = Modifier
+  modifier: Modifier = Modifier,
+  currentTemp: Double = 20.0,
+  windSpeed: Double = 10.0
 ) {
   var webViewRef by remember { mutableStateOf<WebView?>(null) }
 
-  // Sync meteorological condition with Three.js scene
-  LaunchedEffect(weatherCode, isDay, webViewRef) {
-    webViewRef?.evaluateJavascript(
-      "if (window.setWeatherFromAndroid) { window.setWeatherFromAndroid($weatherCode, $isDay); }",
-      null
-    )
+  // Sync meteorological condition, temperature, and wind with Three.js scene
+  LaunchedEffect(weatherCode, isDay, currentTemp, windSpeed, webViewRef) {
+    try {
+      webViewRef?.evaluateJavascript(
+        "if (window.setWeatherFromAndroid) { window.setWeatherFromAndroid($weatherCode, $isDay, $currentTemp, $windSpeed); }",
+        null
+      )
+    } catch (_: Exception) {}
   }
 
   Box(
     modifier = modifier
-      .background(Color(0x18000000))
+      .background(Color.Transparent)
       .testTag("smooth_weather_3d_view")
   ) {
     AndroidView(
       modifier = Modifier.fillMaxSize(),
       factory = { ctx ->
+        var touchStartX = 0f
+        var touchStartY = 0f
         WebView(ctx).apply {
           layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -861,6 +1204,9 @@ fun SmoothWeather3DView(
           )
           setBackgroundColor(0x00000000)
           setLayerType(View.LAYER_TYPE_HARDWARE, null)
+          if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
+          }
           settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -869,13 +1215,27 @@ fun SmoothWeather3DView(
             useWideViewPort = true
             loadWithOverviewMode = true
             cacheMode = WebSettings.LOAD_DEFAULT
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+              safeBrowsingEnabled = false
+            }
           }
-          // Interactive touch listener without interfering with outer verticalScroll
+          // Interactive touch listener: horizontal tilts 3D, vertical scrolls the full-screen window away
           setOnTouchListener { v, event ->
             when (event.action) {
-              android.view.MotionEvent.ACTION_DOWN,
+              android.view.MotionEvent.ACTION_DOWN -> {
+                touchStartX = event.x
+                touchStartY = event.y
+              }
               android.view.MotionEvent.ACTION_MOVE -> {
-                v.parent?.requestDisallowInterceptTouchEvent(true)
+                val dx = kotlin.math.abs(event.x - touchStartX)
+                val dy = kotlin.math.abs(event.y - touchStartY)
+                if (dx > dy && dx > 14f) {
+                  // Horizontal drag: tilt 3D scene
+                  v.parent?.requestDisallowInterceptTouchEvent(true)
+                } else if (dy > dx && dy > 14f) {
+                  // Vertical drag: allow scrolling down so full-screen 3D window disappears!
+                  v.parent?.requestDisallowInterceptTouchEvent(false)
+                }
               }
               android.view.MotionEvent.ACTION_UP,
               android.view.MotionEvent.ACTION_CANCEL -> {
@@ -887,10 +1247,12 @@ fun SmoothWeather3DView(
           webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
               super.onPageFinished(view, url)
-              view?.evaluateJavascript(
-                "if (window.setWeatherFromAndroid) { window.setWeatherFromAndroid($weatherCode, $isDay); }",
-                null
-              )
+              try {
+                view?.evaluateJavascript(
+                  "if (window.setWeatherFromAndroid) { window.setWeatherFromAndroid($weatherCode, $isDay, $currentTemp, $windSpeed); }",
+                  null
+                )
+              } catch (_: Exception) {}
             }
 
             override fun onRenderProcessGone(

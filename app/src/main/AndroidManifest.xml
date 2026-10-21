@@ -21,6 +21,9 @@
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.MyApplication">
+        <meta-data
+            android:name="android.webkit.WebView.EnableSafeBrowsing"
+            android:value="false" />
         <activity
             android:name=".MainActivity"
             android:windowSoftInputMode="adjustResize"

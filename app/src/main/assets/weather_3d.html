@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-  <title>Smooth Fixed 3D Weather</title>
+  <title>Smooth Fixed 3D Weather Canvas</title>
   <style>
     * {
       box-sizing: border-box;
@@ -17,7 +17,6 @@
       height: 100%;
       overflow: hidden;
       background: transparent;
-      font-family: system-ui, -apple-system, sans-serif;
     }
     #webgl-container {
       width: 100%;
@@ -27,95 +26,21 @@
       left: 0;
       touch-action: none;
     }
-    /* Compact Weather Simulation Bar directly under 3D canvas */
-    .sim-bar {
-      position: absolute;
-      bottom: 6px;
-      left: 6px;
-      right: 6px;
-      display: flex;
-      justify-content: center;
-      gap: 5px;
-      overflow-x: auto;
-      scrollbar-width: none;
-      -webkit-overflow-scrolling: touch;
-      z-index: 10;
-      pointer-events: auto;
-    }
-    .sim-bar::-webkit-scrollbar { display: none; }
-    .sim-btn {
-      background: rgba(15, 23, 42, 0.65);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 12px;
-      padding: 4px 9px;
-      color: #94a3b8;
-      font-size: 11px;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      white-space: nowrap;
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      transition: all 0.2s ease;
-    }
-    .sim-btn.active {
-      background: rgba(37, 99, 235, 0.85);
-      color: #ffffff;
-      border-color: #93c5fd;
-      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
-    }
-    .status-badge {
-      position: absolute;
-      top: 6px;
-      left: 8px;
-      background: rgba(15, 23, 42, 0.55);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 10px;
-      padding: 3px 8px;
-      color: #f1f5f9;
-      font-size: 10px;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      pointer-events: none;
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
-    }
   </style>
   <script src="file:///android_asset/three.min.js"></script>
 </head>
 <body>
   <div id="webgl-container"></div>
 
-  <!-- Subtle Status Indicator -->
-  <div class="status-badge" id="status-badge">
-    <span id="badge-icon">☀️</span>
-    <span id="badge-title">Smooth 3D Weather</span>
-  </div>
-
-  <!-- Weather Quick Simulation Bar -->
-  <div class="sim-bar">
-    <button class="sim-btn active" data-mode="clear">☀️ Clear</button>
-    <button class="sim-btn" data-mode="clouds">⛅ Clouds</button>
-    <button class="sim-btn" data-mode="rain">🌧️ Rain</button>
-    <button class="sim-btn" data-mode="storm">⛈️ Storm</button>
-    <button class="sim-btn" data-mode="snow">❄️ Snow</button>
-    <button class="sim-btn" data-mode="night">🌙 Night</button>
-  </div>
-
   <script>
-    // --- 1. Three.js Setup with Smooth Edges & Transparent Canvas ---
+    // --- 1. Three.js Setup with Smooth Edges & Transparent Background ---
     const container = document.getElementById('webgl-container');
     const scene = new THREE.Scene();
 
-    // Fixed Camera Position for Stable, Beautiful Framing
-    const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
-    const FIXED_CAM_POS = new THREE.Vector3(0, 1.6, 8.2);
+    const camera = new THREE.PerspectiveCamera(36, window.innerWidth / (window.innerHeight || 1), 0.1, 100);
+    const FIXED_CAM_POS = new THREE.Vector3(0, 1.35, 8.6);
     camera.position.copy(FIXED_CAM_POS);
-    camera.lookAt(0, 0.5, 0);
+    camera.lookAt(0, 0.45, 0);
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -124,18 +49,18 @@
     });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.5));
-    renderer.setClearColor(0x000000, 0); // Transparent background to blend into host card
+    renderer.setClearColor(0x000000, 0);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
+    renderer.toneMappingExposure = 1.15;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
 
-    // --- 2. Studio Lighting with Soft Shadows ---
+    // --- 2. Lighting & Dynamic Atmospheres ---
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0x334155, 0.85);
     scene.add(hemiLight);
 
-    const dirLight = new THREE.DirectionalLight(0xfff7ed, 1.4);
+    const dirLight = new THREE.DirectionalLight(0xffedd5, 1.45);
     dirLight.position.set(6, 10, 5);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.width = 1024;
@@ -144,22 +69,21 @@
     dirLight.shadow.bias = -0.0005;
     scene.add(dirLight);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
     scene.add(ambientLight);
 
-    const lightningLight = new THREE.PointLight(0xbae6fd, 0, 20);
-    lightningLight.position.set(0, 3.5, 0);
+    const lightningLight = new THREE.PointLight(0xa5f3fc, 0, 22);
+    lightningLight.position.set(0, 4, 0);
     scene.add(lightningLight);
 
-    // --- 3. Smooth Procedural 3D Weather Elements ---
+    // --- 3. Smooth Procedural 3D Weather Models ---
     const rootGroup = new THREE.Group();
     scene.add(rootGroup);
 
-    // A. Smooth Beveled Floating Biome
+    // A. Smooth Floating Biome Platter
     const islandGroup = new THREE.Group();
     rootGroup.add(islandGroup);
 
-    // Smooth Curved Grass Top Platter
     const grassGeo = new THREE.CylinderGeometry(3.6, 3.4, 0.65, 48);
     grassGeo.computeVertexNormals();
     const grassMat = new THREE.MeshStandardMaterial({
@@ -173,7 +97,6 @@
     grassMesh.position.y = -0.3;
     islandGroup.add(grassMesh);
 
-    // Smooth Earth Underside
     const earthGeo = new THREE.CylinderGeometry(3.4, 0.4, 2.2, 36);
     earthGeo.computeVertexNormals();
     const earthMat = new THREE.MeshStandardMaterial({
@@ -187,7 +110,7 @@
     earthMesh.castShadow = true;
     islandGroup.add(earthMesh);
 
-    // Smooth Low-Poly Organic Trees (with high segment smoothness)
+    const allTrees = [];
     function createSmoothTree(x, z, scale = 1) {
       const tree = new THREE.Group();
       const trunkMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.8, flatShading: false });
@@ -206,6 +129,7 @@
         tree.add(tier);
       }
       tree.position.set(x, 0.02, z);
+      allTrees.push({ group: tree, baseScale: scale, origZ: z, origX: x });
       return tree;
     }
     islandGroup.add(createSmoothTree(-1.3, 0.6, 1.1));
@@ -214,7 +138,6 @@
     islandGroup.add(createSmoothTree(2.0, -0.4, 0.8));
     islandGroup.add(createSmoothTree(0.1, -1.4, 1.2));
 
-    // Smooth Pebble Accents
     function createSmoothPebble(x, z, radius) {
       const pGeo = new THREE.SphereGeometry(radius, 20, 20);
       pGeo.scale(1.2, 0.7, 1.0);
@@ -227,12 +150,11 @@
     islandGroup.add(createSmoothPebble(0.6, 1.2, 0.28));
     islandGroup.add(createSmoothPebble(-0.7, 1.3, 0.22));
 
-    // B. Smooth Hero Sun System
+    // B. Smooth Hero Sun
     const sunGroup = new THREE.Group();
-    sunGroup.position.set(2.8, 2.6, -1.0);
+    sunGroup.position.set(2.6, 2.5, -1.0);
     rootGroup.add(sunGroup);
 
-    // Glowing Golden Sphere with High Subdivision for Ultra-Smooth Edges
     const sunCoreGeo = new THREE.SphereGeometry(1.05, 36, 36);
     const sunCoreMat = new THREE.MeshStandardMaterial({
       color: 0xfbbf24,
@@ -244,7 +166,6 @@
     const sunCore = new THREE.Mesh(sunCoreGeo, sunCoreMat);
     sunGroup.add(sunCore);
 
-    // Smooth Radiating Corona Halo
     const coronaGroup = new THREE.Group();
     sunGroup.add(coronaGroup);
     const rayMat = new THREE.MeshStandardMaterial({
@@ -264,7 +185,6 @@
       coronaGroup.add(ray);
     }
 
-    // Outer Soft Glowing Aura
     const sunHaloMat = new THREE.MeshBasicMaterial({
       color: 0xfef08a,
       transparent: true,
@@ -276,7 +196,7 @@
 
     // C. Smooth Lunar System (Night Mode)
     const moonGroup = new THREE.Group();
-    moonGroup.position.set(-2.5, 2.7, -1.2);
+    moonGroup.position.set(-2.5, 2.6, -1.2);
     moonGroup.visible = false;
     rootGroup.add(moonGroup);
 
@@ -300,7 +220,7 @@
     const moonHalo = new THREE.Mesh(new THREE.SphereGeometry(1.35, 32, 32), moonHaloMat);
     moonGroup.add(moonHalo);
 
-    // D. Silky Smooth Volumetric Clouds (High-Subdivision Smooth Normals)
+    // D. Silky Smooth Volumetric Clouds
     function createSmoothCloud(scale = 1, isDark = false) {
       const cloud = new THREE.Group();
       const cloudMat = new THREE.MeshStandardMaterial({
@@ -310,7 +230,6 @@
         flatShading: false
       });
 
-      // Fluffy overlapping spheres with 28 subdivisions for curvature smoothness
       const puffs = [
         [0, 0, 0, 0.82],
         [0.7, 0.08, 0, 0.64],
@@ -347,50 +266,46 @@
     cloud3.position.set(0.1, 2.6, -1.4);
     cloudsGroup.add(cloud3);
 
-    // E. Particles (Smooth Rain & Soft Snow)
-    // Rain
-    const rainCount = 280;
+    // E. Dynamic Particle Systems (Rain & Snow)
+    const rainCount = 300;
     const rainGeo = new THREE.BufferGeometry();
     const rainPositions = new Float32Array(rainCount * 3);
     for (let i = 0; i < rainCount * 3; i += 3) {
-      rainPositions[i] = (Math.random() - 0.5) * 9;
-      rainPositions[i + 1] = Math.random() * 8;
-      rainPositions[i + 2] = (Math.random() - 0.5) * 9;
+      rainPositions[i] = (Math.random() - 0.5) * 9.5;
+      rainPositions[i + 1] = Math.random() * 8.5;
+      rainPositions[i + 2] = (Math.random() - 0.5) * 9.5;
     }
     rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
     const rainMat = new THREE.PointsMaterial({
       color: 0x93c5fd,
       size: 0.11,
       transparent: true,
-      opacity: 0.8
+      opacity: 0.85
     });
     const rainSystem = new THREE.Points(rainGeo, rainMat);
     rainSystem.visible = false;
     scene.add(rainSystem);
 
-    // Snow
-    const snowCount = 220;
+    const snowCount = 240;
     const snowGeo = new THREE.BufferGeometry();
     const snowPositions = new Float32Array(snowCount * 3);
     for (let i = 0; i < snowCount * 3; i += 3) {
-      snowPositions[i] = (Math.random() - 0.5) * 9;
-      snowPositions[i + 1] = Math.random() * 8;
-      snowPositions[i + 2] = (Math.random() - 0.5) * 9;
+      snowPositions[i] = (Math.random() - 0.5) * 9.5;
+      snowPositions[i + 1] = Math.random() * 8.5;
+      snowPositions[i + 2] = (Math.random() - 0.5) * 9.5;
     }
     snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPositions, 3));
     const snowMat = new THREE.PointsMaterial({
       color: 0xffffff,
       size: 0.16,
       transparent: true,
-      opacity: 0.85
+      opacity: 0.9
     });
     const snowSystem = new THREE.Points(snowGeo, snowMat);
     snowSystem.visible = false;
     scene.add(snowSystem);
 
-    // --- 4. Fixed View with Interactive Subtle Depth Parallax ---
-    // Instead of free-floating orbit, the camera stays FIXED at its hero framing,
-    // and subtle interactive touch/mouse tilting gives a tactile 3D depth feeling.
+    // --- 4. Fixed View Touch Tilt Parallax ---
     let targetTiltX = 0;
     let targetTiltY = 0;
     let currentTiltX = 0;
@@ -410,13 +325,13 @@
       if (!isTouching) return;
       const dx = (e.clientX - startTouchX) / window.innerWidth;
       const dy = (e.clientY - startTouchY) / window.innerHeight;
-      targetTiltY = dx * 0.45; // Max ~25 deg tilt
+      targetTiltY = dx * 0.45;
       targetTiltX = dy * 0.35;
     });
 
     window.addEventListener('pointerup', () => {
       isTouching = false;
-      targetTiltX = 0; // Spring back to fixed center view
+      targetTiltX = 0;
       targetTiltY = 0;
     });
 
@@ -468,8 +383,7 @@
         cloudDark: false,
         rain: false,
         snow: false,
-        grassColor: 0x22c55e,
-        title: "☀️ Smooth 3D Sunshine"
+        grassColor: 0x22c55e
       },
       clouds: {
         hemiSky: 0xe2e8f0,
@@ -481,8 +395,7 @@
         cloudDark: false,
         rain: false,
         snow: false,
-        grassColor: 0x16a34a,
-        title: "⛅ Smooth 3D Clouds"
+        grassColor: 0x16a34a
       },
       rain: {
         hemiSky: 0x94a3b8,
@@ -494,8 +407,7 @@
         cloudDark: true,
         rain: true,
         snow: false,
-        grassColor: 0x15803d,
-        title: "🌧️ Smooth 3D Rain"
+        grassColor: 0x15803d
       },
       storm: {
         hemiSky: 0x64748b,
@@ -507,8 +419,7 @@
         cloudDark: true,
         rain: true,
         snow: false,
-        grassColor: 0x14532d,
-        title: "⛈️ Smooth 3D Storm"
+        grassColor: 0x14532d
       },
       snow: {
         hemiSky: 0xf1f5f9,
@@ -520,8 +431,7 @@
         cloudDark: false,
         rain: false,
         snow: true,
-        grassColor: 0xe2e8f0,
-        title: "❄️ Smooth 3D Snow"
+        grassColor: 0xe2e8f0
       },
       night: {
         hemiSky: 0x1e293b,
@@ -533,8 +443,7 @@
         cloudDark: true,
         rain: false,
         snow: false,
-        grassColor: 0x1e3a1f,
-        title: "🌙 Smooth 3D Night"
+        grassColor: 0x1e3a1f
       }
     };
 
@@ -562,23 +471,21 @@
           if (mesh.material) mesh.material.color.setHex(cloudHex);
         });
       });
-
-      document.getElementById('badge-title').innerText = p.title;
-
-      document.querySelectorAll('.sim-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('data-mode') === name);
-      });
     }
 
-    document.querySelectorAll('.sim-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        applyPreset(btn.getAttribute('data-mode'));
-      });
-    });
+    // Dynamic Weather Environmental States
+    let currentTemp = 20.0;
+    let currentWind = 10.0;
 
     // External Bridge for Android Kotlin sync
-    window.setWeatherFromAndroid = function(weatherCode, isDay) {
+    window.setWeatherFromAndroid = function(weatherCode, isDay, temp, windSpeed) {
+      if (temp !== undefined && temp !== null && !isNaN(temp)) {
+        currentTemp = parseFloat(temp);
+      }
+      if (windSpeed !== undefined && windSpeed !== null && !isNaN(windSpeed)) {
+        currentWind = parseFloat(windSpeed);
+      }
+
       if (!isDay) {
         applyPreset('night');
         return;
@@ -596,9 +503,20 @@
       } else {
         applyPreset('clouds');
       }
+
+      // Dynamic Temperature Atmosphere Adjustments
+      if (currentTemp >= 27) {
+        dirLight.color.setHex(0xfeb272);
+        dirLight.intensity = Math.min(1.8, 1.35 + (currentTemp - 27) * 0.03);
+        sunHaloMat.opacity = 0.42;
+      } else if (currentTemp <= 6) {
+        dirLight.color.setHex(0xbae6fd);
+        dirLight.intensity = 0.95;
+        grassMat.color.setHex(0x94a3b8);
+      }
     };
 
-    // --- 6. 60fps Animation Loop with Natural Drift & Smooth Fixed View Spring ---
+    // --- 6. 60fps Animation Loop with Dynamic Natural Reactions ---
     const clock = new THREE.Clock();
     let nextLightning = 3.5;
 
@@ -618,40 +536,55 @@
       // Island gentle float
       islandGroup.position.y = Math.sin(time * 0.7) * 0.08;
 
-      // Sun subtle breathing & corona spin
+      // Dynamic Tree Swaying with Wind
+      const windEffect = Math.min(Math.max(currentWind, 3), 70);
+      allTrees.forEach((t, i) => {
+        const swaySpeed = 1.3 + (i % 3) * 0.45 + windEffect * 0.03;
+        const swayAmount = 0.02 + windEffect * 0.0018;
+        t.group.rotation.z = Math.sin(time * swaySpeed + i * 1.1) * swayAmount;
+      });
+
+      // Sun subtle breathing, heat shimmer, & corona spin
       if (sunGroup.visible) {
-        sunGroup.position.y = 2.6 + Math.sin(time * 1.1) * 0.1;
-        coronaGroup.rotation.z = time * 0.35;
-        const pulse = 1.0 + Math.sin(time * 2.2) * 0.04;
+        const heatPulseFactor = currentTemp > 25 ? (currentTemp - 25) * 0.025 : 0;
+        sunGroup.position.y = 2.5 + Math.sin(time * 1.1) * 0.1;
+        coronaGroup.rotation.z = time * (0.35 + heatPulseFactor * 0.5);
+        const pulse = 1.0 + Math.sin(time * (2.2 + heatPulseFactor * 1.4)) * (0.04 + heatPulseFactor * 0.03);
         sunCore.scale.set(pulse, pulse, pulse);
       }
 
       // Moon float
       if (moonGroup.visible) {
-        moonGroup.position.y = 2.7 + Math.sin(time * 0.8) * 0.08;
+        moonGroup.position.y = 2.6 + Math.sin(time * 0.8) * 0.08;
       }
 
-      // Volumetric Cloud Floating
-      cloud1.position.x = -1.8 + Math.sin(time * 0.45) * 0.25;
-      cloud2.position.x = 1.9 + Math.cos(time * 0.5) * 0.22;
-      cloud3.position.z = -1.4 + Math.sin(time * 0.35) * 0.2;
+      // Dynamic Volumetric Cloud Floating based on wind
+      const cloudSpeed = 0.32 + windEffect * 0.02;
+      cloud1.position.x = -1.8 + Math.sin(time * (cloudSpeed * 1.1)) * 0.32;
+      cloud2.position.x = 1.9 + Math.cos(time * (cloudSpeed * 1.25)) * 0.28;
+      cloud3.position.z = -1.4 + Math.sin(time * (cloudSpeed * 0.95)) * 0.22;
 
-      // Rain animation
+      // Dynamic Rain animation
       if (rainSystem.visible) {
         const positions = rainGeo.attributes.position.array;
+        const rainSpeed = 14 + windEffect * 0.1;
         for (let i = 1; i < rainPositions.length; i += 3) {
-          positions[i] -= 14 * delta;
-          if (positions[i] < -1.8) positions[i] = 7.0;
+          positions[i] -= rainSpeed * delta;
+          positions[i - 1] += (windEffect * 0.015) * delta;
+          if (positions[i] < -1.8) {
+            positions[i] = 7.0;
+            positions[i - 1] = (Math.random() - 0.5) * 9.5;
+          }
         }
         rainGeo.attributes.position.needsUpdate = true;
       }
 
-      // Snow animation
+      // Dynamic Snow animation
       if (snowSystem.visible) {
         const positions = snowGeo.attributes.position.array;
         for (let i = 0; i < snowPositions.length; i += 3) {
-          positions[i] += Math.sin(time + i) * 0.012;
-          positions[i + 1] -= 2.8 * delta;
+          positions[i] += Math.sin(time + i) * (0.012 + windEffect * 0.001);
+          positions[i + 1] -= (2.8 + windEffect * 0.02) * delta;
           if (positions[i + 1] < -1.8) positions[i + 1] = 7.0;
         }
         snowGeo.attributes.position.needsUpdate = true;
@@ -669,11 +602,15 @@
       renderer.render(scene, camera);
     }
 
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
+    function updateDimensions() {
+      const w = container.clientWidth || window.innerWidth || 360;
+      const h = container.clientHeight || window.innerHeight || 240;
+      camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
+      renderer.setSize(w, h);
+    }
+    window.addEventListener('resize', updateDimensions);
+    setTimeout(updateDimensions, 80);
 
     applyPreset('clear');
     animate();
