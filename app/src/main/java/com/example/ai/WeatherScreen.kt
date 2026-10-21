@@ -9,6 +9,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -28,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -47,8 +49,12 @@ import java.util.Locale
 
 @Composable
 fun WeatherScreen(
-  modifier: Modifier = Modifier
+  modifier: Modifier = Modifier,
+  onBack: (() -> Unit)? = null
 ) {
+  BackHandler(enabled = onBack != null) {
+    onBack?.invoke()
+  }
   val context = LocalContext.current
   val coroutineScope = rememberCoroutineScope()
   val keyboardController = LocalSoftwareKeyboardController.current
@@ -346,6 +352,20 @@ fun WeatherScreen(
               verticalAlignment = Alignment.CenterVertically,
               horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+              if (onBack != null) {
+                FilledTonalIconButton(
+                  onClick = onBack,
+                  modifier = Modifier
+                    .size(48.dp)
+                    .testTag("weather_back_button")
+                ) {
+                  Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back to Reos Apps",
+                    tint = MaterialTheme.colorScheme.onSurface
+                  )
+                }
+              }
               OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
@@ -788,6 +808,21 @@ fun WeatherScreen(
               verticalAlignment = Alignment.CenterVertically,
               horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+              if (onBack != null) {
+                IconButton(
+                  onClick = onBack,
+                  modifier = Modifier
+                    .size(32.dp)
+                    .testTag("weather_sticky_back_button")
+                ) {
+                  Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back to Reos Apps",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(18.dp)
+                  )
+                }
+              }
               Icon(
                 imageVector = when {
                   data.weatherCode in 0..1 -> if (data.isDay) Icons.Default.WbSunny else Icons.Default.NightlightRound

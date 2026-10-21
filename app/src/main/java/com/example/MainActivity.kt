@@ -28,12 +28,13 @@ import androidx.compose.ui.unit.sp
 import com.example.addons.AddonsScreen
 import com.example.ai.NotificationHelper
 import com.example.ai.WeatherScreen
+import com.example.reos.ReosAppsScreen
 import com.example.reos.ReosScreen
 import com.example.ui.theme.ReosTechTheme
 
 enum class MainAppTab(val title: String) {
   REOS("Reos"),
-  WEATHER("Weather"),
+  REOS_APPS("Reos Apps"),
   ADDONS("Add-ons")
 }
 
@@ -53,13 +54,14 @@ class MainActivity : ComponentActivity() {
     }
     val destination = intent?.getStringExtra("destination_tab")
     val initialTab = when (destination) {
-      "weather" -> MainAppTab.WEATHER
+      "weather", "apps" -> MainAppTab.REOS_APPS
       "addons" -> MainAppTab.ADDONS
       else -> MainAppTab.REOS
     }
+    val initialSubApp = if (destination == "weather") "weather" else null
     setContent {
       ReosTechTheme {
-        MainAppContainer(initialTab = initialTab)
+        MainAppContainer(initialTab = initialTab, initialSubApp = initialSubApp)
       }
     }
   }
@@ -67,12 +69,23 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainAppContainer(
-  initialTab: MainAppTab = MainAppTab.REOS
+  initialTab: MainAppTab = MainAppTab.REOS,
+  initialSubApp: String? = null
 ) {
   var currentTab by remember { mutableStateOf(initialTab) }
-  // Back button handling: If in secondary tab, pressing back returns to Reos
-  BackHandler(enabled = currentTab != MainAppTab.REOS) {
-    currentTab = MainAppTab.REOS
+  var activeSubApp by remember { mutableStateOf(initialSubApp) }
+  var reosBrowserUrlRequest by remember { mutableStateOf<String?>(null) }
+  var reosBrowserUrlTimestamp by remember { mutableLongStateOf(0L) }
+
+  // Back button handling:
+  // If in weather sub-app, pressing back returns to Reos Apps hub
+  // If in secondary tab, pressing back returns to Reos
+  BackHandler(enabled = currentTab != MainAppTab.REOS || activeSubApp != null) {
+    if (activeSubApp != null) {
+      activeSubApp = null
+    } else {
+      currentTab = MainAppTab.REOS
+    }
   }
   Box(
     modifier = Modifier
@@ -95,19 +108,45 @@ fun MainAppContainer(
       ) {
         ReosScreen(
           initialUrl = com.example.reos.REOS_TAB_URL,
-          onNavigateToWeather = { currentTab = MainAppTab.WEATHER },
-          onNavigateToAddons = { currentTab = MainAppTab.ADDONS },
+          loadUrlRequest = reosBrowserUrlRequest,
+          urlRequestTimestamp = reosBrowserUrlTimestamp,
+          onNavigateToWeather = {
+            currentTab = MainAppTab.REOS_APPS
+            activeSubApp = "weather"
+          },
+          onNavigateToAddons = {
+            currentTab = MainAppTab.ADDONS
+            activeSubApp = null
+          },
           isActiveTab = currentTab == MainAppTab.REOS
         )
       }
 
-      // 2. Weather Tab
+      // 2. Reos Apps Tab (hosts ReosAppsScreen in tile form; clicking Weather tile opens WeatherScreen)
       AnimatedVisibility(
-        visible = currentTab == MainAppTab.WEATHER,
+        visible = currentTab == MainAppTab.REOS_APPS,
         enter = fadeIn(),
         exit = fadeOut()
       ) {
-        WeatherScreen()
+        if (activeSubApp == "weather") {
+          WeatherScreen(
+            onBack = { activeSubApp = null }
+          )
+        } else {
+          ReosAppsScreen(
+            onNavigateToWeather = { activeSubApp = "weather" },
+            onNavigateToReos = {
+              reosBrowserUrlRequest = com.example.reos.SEARCH_WEB_URL
+              reosBrowserUrlTimestamp = System.currentTimeMillis()
+              currentTab = MainAppTab.REOS
+              activeSubApp = null
+            },
+            onNavigateToAddons = {
+              currentTab = MainAppTab.ADDONS
+              activeSubApp = null
+            }
+          )
+        }
       }
 
       // 3. Add-ons Tab
@@ -117,14 +156,24 @@ fun MainAppContainer(
         exit = fadeOut()
       ) {
         AddonsScreen(
-          onNavigateToWeather = { currentTab = MainAppTab.WEATHER }
+          onNavigateToWeather = {
+            currentTab = MainAppTab.REOS_APPS
+            activeSubApp = "weather"
+          }
         )
       }
     }
     // 2. Ultra-Modern Flat Navigation Bar
     FlatModernNavigationBar(
       currentTab = currentTab,
-      onTabSelected = { currentTab = it },
+      onTabSelected = { selectedTab ->
+        if (selectedTab == MainAppTab.REOS_APPS && currentTab == MainAppTab.REOS_APPS && activeSubApp != null) {
+          // Tapping Reos Apps tab while inside a sub-app (like weather) navigates back to the Reos Apps hub
+          activeSubApp = null
+        } else {
+          currentTab = selectedTab
+        }
+      },
       modifier = Modifier
         .align(Alignment.BottomCenter)
         .windowInsetsPadding(WindowInsets.navigationBars)
@@ -140,8 +189,8 @@ fun FlatModernNavigationBar(
 ) {
   val tabs = listOf(
     Triple(MainAppTab.REOS, "Reos", Icons.Default.Language),
-    Triple(MainAppTab.WEATHER, "Weather", Icons.Default.Cloud),
-    Triple(MainAppTab.ADDONS, "Add-ons", Icons.Default.Apps)
+    Triple(MainAppTab.REOS_APPS, "Reos Apps", Icons.Default.Apps),
+    Triple(MainAppTab.ADDONS, "Add-ons", Icons.Default.Extension)
   )
 
   // Floating Flat Modern Dock Container with subtle frosted glass aesthetic

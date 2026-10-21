@@ -52,8 +52,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 
 const val DEFAULT_WEB_URL = "https://reostech.pagekite.me"
-const val REOS_TAB_URL = "https://reostech.pgekite.me"
+const val REOS_TAB_URL = "https://reostech.pagekite.me"
 const val FALLBACK_WEB_URL = "https://reostech.pagekite.me"
+const val SEARCH_WEB_URL = "https://reostech.pagekite.me/search.html"
 const val DESKTOP_USER_AGENT =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 
@@ -62,6 +63,8 @@ const val DESKTOP_USER_AGENT =
 fun ReosScreen(
   modifier: Modifier = Modifier,
   initialUrl: String = REOS_TAB_URL,
+  loadUrlRequest: String? = null,
+  urlRequestTimestamp: Long = 0L,
   onNavigateToWeather: (() -> Unit)? = null,
   onNavigateToAddons: (() -> Unit)? = null,
   isActiveTab: Boolean = true
@@ -150,16 +153,23 @@ fun ReosScreen(
     }
   }
 
-  // Automatic failover watchdog: If short URL fails to complete within 4.5s or stalls, switch to backup mirror
+  // Load URL whenever external request is triggered (e.g. from Reos Browser tile)
+  LaunchedEffect(loadUrlRequest, urlRequestTimestamp) {
+    if (!loadUrlRequest.isNullOrBlank()) {
+      targetUrl = loadUrlRequest
+      currentLoadedUrl = loadUrlRequest
+      isWebError = false
+      isOffline = false
+      webViewRef?.loadUrl(loadUrlRequest)
+    }
+  }
+
+  // Failover watchdog if legacy pgekite URL is encountered
   LaunchedEffect(targetUrl, webViewInstanceKey) {
-    if (targetUrl == REOS_TAB_URL || targetUrl.contains("pgekite")) {
-      kotlinx.coroutines.delay(4500L)
-      if (isLoading && targetUrl != FALLBACK_WEB_URL) {
-        android.util.Log.w("ReosScreen", "Short URL loading timed out. Auto failing over to $FALLBACK_WEB_URL")
-        targetUrl = FALLBACK_WEB_URL
-        currentLoadedUrl = FALLBACK_WEB_URL
-        webViewRef?.loadUrl(FALLBACK_WEB_URL)
-      }
+    if (targetUrl.contains("pgekite")) {
+      targetUrl = FALLBACK_WEB_URL
+      currentLoadedUrl = FALLBACK_WEB_URL
+      webViewRef?.loadUrl(FALLBACK_WEB_URL)
     }
   }
 
@@ -462,7 +472,7 @@ fun ReosScreen(
               text = if (isOffline) {
                 "Please verify your Wi-Fi or mobile data connection to access the Reos web service."
               } else {
-                "Unable to connect to https://reostech.pgekite.me or https://reostech.pagekite.me. Please check your network or server status."
+                "Unable to connect to https://reostech.pagekite.me/search.html. Please check your network or server status."
               },
               fontSize = 14.sp,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -798,18 +808,6 @@ fun ReosScreen(
         ) {
           OutlinedButton(
             onClick = {
-              targetUrl = REOS_TAB_URL
-              currentLoadedUrl = REOS_TAB_URL
-              webViewRef?.loadUrl(REOS_TAB_URL)
-              showQuickActionsSheet = false
-            },
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(16.dp)
-          ) {
-            Text("Reos Tab", fontSize = 12.sp)
-          }
-          OutlinedButton(
-            onClick = {
               targetUrl = DEFAULT_WEB_URL
               currentLoadedUrl = DEFAULT_WEB_URL
               webViewRef?.loadUrl(DEFAULT_WEB_URL)
@@ -818,7 +816,19 @@ fun ReosScreen(
             modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(16.dp)
           ) {
-            Text("Default Portal", fontSize = 12.sp)
+            Text("Home Portal", fontSize = 12.sp)
+          }
+          OutlinedButton(
+            onClick = {
+              targetUrl = SEARCH_WEB_URL
+              currentLoadedUrl = SEARCH_WEB_URL
+              webViewRef?.loadUrl(SEARCH_WEB_URL)
+              showQuickActionsSheet = false
+            },
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(16.dp)
+          ) {
+            Text("Search Page", fontSize = 12.sp)
           }
         }
 
