@@ -356,7 +356,7 @@ fun AddonsScreen(
         modifier = Modifier.padding(top = 8.dp)
       )
 
-      // Reos Account Addon Card (Authentication via users.json & ?user=username URL persistence)
+      // Reos Account Addon Card (Authentication & ?user=username URL persistence)
       ReosAccountAddonCard(
         context = context,
         onNavigateToUrl = onNavigateToUrl
@@ -853,7 +853,7 @@ fun ReosAccountAddonCard(
               modifier = Modifier.padding(top = 2.dp)
             ) {
               Text(
-                text = if (loggedInUser != null) "✓ Linked (?user=$loggedInUser)" else "Authentication Required",
+                text = if (loggedInUser != null) "✓ Account Active ($loggedInUser)" else "Authentication Required",
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (loggedInUser != null) Color(0xFF16A34A) else MaterialTheme.colorScheme.outline,
@@ -894,32 +894,11 @@ fun ReosAccountAddonCard(
             color = MaterialTheme.colorScheme.primary
           )
           Text(
-            text = "Your username is securely saved. All web applications (Email, Form Builder, Form Responses, AI Chat) will automatically open with ?user=$loggedInUser appended.",
+            text = "Your username is securely saved. All web applications (Email, Form Builder, Form Responses, AI Chat) will automatically open personalized with your account.",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             lineHeight = 17.sp
           )
-
-          // Preview url pill
-          Surface(
-            shape = RoundedCornerShape(10.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHighest,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-          ) {
-            Row(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              Text(
-                text = "https://reostech.pagekite.me/emails.html?user=$loggedInUser",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Medium
-              )
-            }
-          }
 
           if (onNavigateToUrl != null) {
             Text("Quick Launch Linked Apps:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.outline)
@@ -964,7 +943,7 @@ fun ReosAccountAddonCard(
         // --- LOGIN FORM STATE ---
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
           Text(
-            text = "Enter your Reos username and password. Credentials are verified securely against the Reos users database (users.json). Upon exact match, your username is attached to app URLs as ?user=username.",
+            text = "Enter your Reos username and password. Upon verification, your account is linked across all applications.",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             lineHeight = 17.sp
@@ -977,7 +956,6 @@ fun ReosAccountAddonCard(
               authErrorMessage = null
             },
             label = { Text("Username", fontSize = 13.sp) },
-            placeholder = { Text("e.g. TEST or Reos2026", fontSize = 12.sp) },
             leadingIcon = {
               Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(18.dp))
             },
@@ -999,7 +977,6 @@ fun ReosAccountAddonCard(
               authErrorMessage = null
             },
             label = { Text("Password", fontSize = 13.sp) },
-            placeholder = { Text("Exact password", fontSize = 12.sp) },
             leadingIcon = {
               Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
             },
@@ -1074,7 +1051,7 @@ fun ReosAccountAddonCard(
             if (isAuthenticating) {
               CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
               Spacer(Modifier.width(8.dp))
-              Text("Checking users.json...", fontSize = 13.sp)
+              Text("Verifying credentials...", fontSize = 13.sp)
             } else {
               Icon(Icons.Default.Key, contentDescription = null, modifier = Modifier.size(18.dp))
               Spacer(Modifier.width(8.dp))
@@ -1083,7 +1060,7 @@ fun ReosAccountAddonCard(
           }
 
           Text(
-            text = "Verified securely via HTTPS with https://reostech.pagekite.me/users.json",
+            text = "Verified securely via encrypted HTTPS authentication.",
             fontSize = 11.sp,
             color = MaterialTheme.colorScheme.outline
           )
