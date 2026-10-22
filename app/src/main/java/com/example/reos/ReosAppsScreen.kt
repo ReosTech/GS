@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -34,7 +35,6 @@ data class ReosAppItem(
   val category: String,
   val icon: ImageVector,
   val badgeText: String? = null,
-  val isFeatured: Boolean = false,
   val gradientColors: List<Color>,
   val testTag: String
 )
@@ -42,30 +42,78 @@ data class ReosAppItem(
 @Composable
 fun ReosAppsScreen(
   onNavigateToWeather: () -> Unit,
-  onNavigateToReos: () -> Unit,
+  onNavigateToReos: (String) -> Unit = {},
   onNavigateToAddons: () -> Unit,
   modifier: Modifier = Modifier
 ) {
+  val context = LocalContext.current
   var searchQuery by remember { mutableStateOf("") }
   var selectedCategory by remember { mutableStateOf("All") }
   var quickNotesModalOpen by remember { mutableStateOf(false) }
   var quickNoteText by remember { mutableStateOf("") }
   var savedNoteStatus by remember { mutableStateOf<String?>(null) }
 
-  val categories = listOf("All", "Weather", "Productivity", "System")
+  // Reos Account State
+  var loggedInUser by remember { mutableStateOf(ReosAccountManager.getLoggedInUsername(context)) }
 
-  val allApps = remember {
+  DisposableEffect(Unit) {
+    loggedInUser = ReosAccountManager.getLoggedInUsername(context)
+    onDispose { }
+  }
+
+  val categories = listOf("All", "Productivity", "Forms & Mail", "System")
+
+  val allApps = remember(loggedInUser) {
     listOf(
       ReosAppItem(
         id = "weather",
         title = "Weather",
         subtitle = "Interactive 3D atmosphere, dynamic temperature bar, hourly & 7-day forecast",
-        category = "Weather",
+        category = "Productivity",
         icon = Icons.Default.Cloud,
-        badgeText = "3D Interactive",
-        isFeatured = true,
-        gradientColors = listOf(Color(0xFF1E3A8A), Color(0xFF0284C7)),
+        badgeText = "3D View",
+        gradientColors = listOf(Color(0xFF0284C7), Color(0xFF38BDF8)),
         testTag = "reos_apps_tile_weather"
+      ),
+      ReosAppItem(
+        id = "ai",
+        title = "AI",
+        subtitle = "Interactive Reos AI assistant & chat portal (chat.html)",
+        category = "Productivity",
+        icon = Icons.Default.Psychology,
+        badgeText = "chat.html",
+        gradientColors = listOf(Color(0xFF4F46E5), Color(0xFF818CF8)),
+        testTag = "reos_apps_tile_ai"
+      ),
+      ReosAppItem(
+        id = "email",
+        title = "Email",
+        subtitle = "Connected Reos webmail suite and inbox messaging (emails.html)",
+        category = "Forms & Mail",
+        icon = Icons.Default.Email,
+        badgeText = if (loggedInUser != null) "User: $loggedInUser" else "emails.html",
+        gradientColors = listOf(Color(0xFF0369A1), Color(0xFF0EA5E9)),
+        testTag = "reos_apps_tile_email"
+      ),
+      ReosAppItem(
+        id = "form_builder",
+        title = "Form Builder",
+        subtitle = "Design, customize, and publish dynamic web forms & surveys (form_builder.html)",
+        category = "Forms & Mail",
+        icon = Icons.Default.DynamicForm,
+        badgeText = if (loggedInUser != null) "User: $loggedInUser" else "form_builder.html",
+        gradientColors = listOf(Color(0xFFC2410C), Color(0xFFF97316)),
+        testTag = "reos_apps_tile_form_builder"
+      ),
+      ReosAppItem(
+        id = "form_responses",
+        title = "Form Responses",
+        subtitle = "Review submissions, analyze responses, and track real-time feedback (responses.html)",
+        category = "Forms & Mail",
+        icon = Icons.Default.Poll,
+        badgeText = if (loggedInUser != null) "User: $loggedInUser" else "responses.html",
+        gradientColors = listOf(Color(0xFF6B21A8), Color(0xFFA855F7)),
+        testTag = "reos_apps_tile_form_responses"
       ),
       ReosAppItem(
         id = "reos_browser",
@@ -74,18 +122,16 @@ fun ReosAppsScreen(
         category = "Productivity",
         icon = Icons.Default.Language,
         badgeText = "search.html",
-        isFeatured = false,
         gradientColors = listOf(Color(0xFF0F172A), Color(0xFF334155)),
         testTag = "reos_apps_tile_reos"
       ),
       ReosAppItem(
         id = "addons",
         title = "Add-ons & Cloud",
-        subtitle = "Cloud Firestore sync, Google Sign-In, offline caching & preference toggles",
+        subtitle = "Reos Account login, Cloud Firestore sync, offline caching & preference toggles",
         category = "System",
         icon = Icons.Default.Extension,
-        badgeText = "Preferences",
-        isFeatured = false,
+        badgeText = if (loggedInUser != null) "Account: $loggedInUser" else "Preferences",
         gradientColors = listOf(Color(0xFF065F46), Color(0xFF059669)),
         testTag = "reos_apps_tile_addons"
       ),
@@ -96,7 +142,6 @@ fun ReosAppsScreen(
         category = "System",
         icon = Icons.Default.Widgets,
         badgeText = "Desktop & Push",
-        isFeatured = false,
         gradientColors = listOf(Color(0xFF92400E), Color(0xFFD97706)),
         testTag = "reos_apps_tile_widgets"
       ),
@@ -107,14 +152,13 @@ fun ReosAppsScreen(
         category = "Productivity",
         icon = Icons.Default.EditNote,
         badgeText = "Instant Memo",
-        isFeatured = false,
         gradientColors = listOf(Color(0xFF831843), Color(0xFFDB2777)),
         testTag = "reos_apps_tile_notes"
       )
     )
   }
 
-  val filteredApps = remember(searchQuery, selectedCategory) {
+  val filteredApps = remember(searchQuery, selectedCategory, allApps) {
     allApps.filter { app ->
       val matchesSearch = searchQuery.isBlank() ||
         app.title.contains(searchQuery, ignoreCase = true) ||
@@ -166,10 +210,12 @@ fun ReosAppsScreen(
               )
             }
 
+            // Account status badge pill
             Surface(
               shape = RoundedCornerShape(14.dp),
-              color = MaterialTheme.colorScheme.primaryContainer,
-              border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+              color = if (loggedInUser != null) Color(0x3322C55E) else MaterialTheme.colorScheme.primaryContainer,
+              border = BorderStroke(1.dp, if (loggedInUser != null) Color(0xFF22C55E) else MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+              modifier = Modifier.clickable { onNavigateToAddons() }
             ) {
               Row(
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -179,13 +225,13 @@ fun ReosAppsScreen(
                 Box(
                   modifier = Modifier
                     .size(8.dp)
-                    .background(Color(0xFF22C55E), CircleShape)
+                    .background(if (loggedInUser != null) Color(0xFF22C55E) else MaterialTheme.colorScheme.primary, CircleShape)
                 )
                 Text(
-                  text = "Active Hub",
+                  text = if (loggedInUser != null) "👤 $loggedInUser" else "Reos Account",
                   fontSize = 11.sp,
                   fontWeight = FontWeight.Bold,
-                  color = MaterialTheme.colorScheme.onPrimaryContainer
+                  color = if (loggedInUser != null) Color(0xFF4ADE80) else MaterialTheme.colorScheme.onPrimaryContainer
                 )
               }
             }
@@ -247,36 +293,29 @@ fun ReosAppsScreen(
         }
       }
 
-      // App Tiles
+      // All App Tiles (Standardized Uniform Tile Grid including Weather)
       items(
         items = filteredApps,
         key = { it.id },
-        span = { item ->
-          // Featured apps like Weather span full width for rich tile display
-          if (item.isFeatured) GridItemSpan(maxLineSpan) else GridItemSpan(1)
-        }
+        span = { GridItemSpan(1) }
       ) { appItem ->
-        if (appItem.isFeatured) {
-          // --- FEATURED WEATHER TILE ---
-          FeaturedWeatherTile(
-            item = appItem,
-            onClick = onNavigateToWeather
-          )
-        } else {
-          // --- STANDARD APP TILE ---
-          StandardAppTile(
-            item = appItem,
-            onClick = {
-              when (appItem.id) {
-                "reos_browser" -> onNavigateToReos()
-                "addons" -> onNavigateToAddons()
-                "widgets_alerts" -> onNavigateToAddons()
-                "quick_notes" -> quickNotesModalOpen = true
-                else -> onNavigateToWeather()
-              }
+        StandardAppTile(
+          item = appItem,
+          onClick = {
+            when (appItem.id) {
+              "weather" -> onNavigateToWeather()
+              "ai" -> onNavigateToReos(ReosAccountManager.formatAppUrl(context, CHAT_AI_WEB_URL))
+              "email" -> onNavigateToReos(ReosAccountManager.formatAppUrl(context, EMAIL_WEB_URL))
+              "form_builder" -> onNavigateToReos(ReosAccountManager.formatAppUrl(context, FORM_BUILDER_WEB_URL))
+              "form_responses" -> onNavigateToReos(ReosAccountManager.formatAppUrl(context, FORM_RESPONSES_WEB_URL))
+              "reos_browser" -> onNavigateToReos(ReosAccountManager.formatAppUrl(context, SEARCH_WEB_URL))
+              "addons" -> onNavigateToAddons()
+              "widgets_alerts" -> onNavigateToAddons()
+              "quick_notes" -> quickNotesModalOpen = true
+              else -> onNavigateToWeather()
             }
-          )
-        }
+          }
+        )
       }
     }
 
@@ -330,178 +369,6 @@ fun ReosAppsScreen(
           }
         }
       )
-    }
-  }
-}
-
-/**
- * Featured Weather Tile
- * Highlighted prominently as requested by the user, opening the Weather tab on click.
- */
-@Composable
-fun FeaturedWeatherTile(
-  item: ReosAppItem,
-  onClick: () -> Unit,
-  modifier: Modifier = Modifier
-) {
-  Card(
-    modifier = modifier
-      .fillMaxWidth()
-      .clip(RoundedCornerShape(24.dp))
-      .clickable(onClick = onClick)
-      .testTag(item.testTag),
-    shape = RoundedCornerShape(24.dp),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
-    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp, pressedElevation = 8.dp)
-  ) {
-    Box(
-      modifier = Modifier
-        .fillMaxWidth()
-        .background(
-          Brush.linearGradient(
-            colors = listOf(
-              Color(0xFF0F172A),
-              Color(0xFF1E293B),
-              Color(0xFF172554)
-            )
-          )
-        )
-    ) {
-      Column(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-      ) {
-        // Top Row: Badges & Launch Icon
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-          ) {
-            // Weather 3D App Icon Box
-            Box(
-              modifier = Modifier
-                .size(48.dp)
-                .background(
-                  Brush.radialGradient(
-                    colors = listOf(Color(0xFF38BDF8), Color(0xFF0284C7))
-                  ),
-                  RoundedCornerShape(16.dp)
-                ),
-              contentAlignment = Alignment.Center
-            ) {
-              Icon(
-                imageVector = Icons.Default.WbSunny,
-                contentDescription = "Weather Icon",
-                tint = Color.White,
-                modifier = Modifier.size(26.dp)
-              )
-            }
-
-            Column {
-              Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-              ) {
-                Text(
-                  text = item.title,
-                  style = MaterialTheme.typography.titleLarge,
-                  fontWeight = FontWeight.ExtraBold,
-                  color = Color.White
-                )
-                Surface(
-                  shape = RoundedCornerShape(8.dp),
-                  color = Color(0x3338BDF8)
-                ) {
-                  Text(
-                    text = item.badgeText ?: "3D App",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF7DD3FC),
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                  )
-                }
-              }
-              Text(
-                text = "Atmospheric Engine & Forecast",
-                fontSize = 12.sp,
-                color = Color(0xFF94A3B8)
-              )
-            }
-          }
-
-          // Launch Action Pill
-          Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = Color(0xFF2563EB),
-            border = BorderStroke(1.dp, Color(0x4D60A5FA))
-          ) {
-            Row(
-              modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-              Text(
-                text = "Open App",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-              )
-              Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(14.dp)
-              )
-            }
-          }
-        }
-
-        // Subtitle / Description
-        Text(
-          text = item.subtitle,
-          style = MaterialTheme.typography.bodyMedium,
-          color = Color(0xFFCBD5E1),
-          lineHeight = 20.sp
-        )
-
-        // Feature Highlights Strip
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-          WeatherFeaturePill(icon = Icons.Default.ViewInAr, label = "3D Clouds & Sun")
-          WeatherFeaturePill(icon = Icons.Default.Thermostat, label = "Dynamic Temp Bar")
-          WeatherFeaturePill(icon = Icons.Default.CalendarMonth, label = "7-Day Forecast")
-        }
-      }
-    }
-  }
-}
-
-@Composable
-fun WeatherFeaturePill(
-  icon: ImageVector,
-  label: String
-) {
-  Surface(
-    shape = RoundedCornerShape(12.dp),
-    color = Color(0x1AFFFFFF),
-    border = BorderStroke(1.dp, Color(0x26FFFFFF))
-  ) {
-    Row(
-      modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(5.dp)
-    ) {
-      Icon(icon, contentDescription = null, tint = Color(0xFF93C5FD), modifier = Modifier.size(13.dp))
-      Text(label, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color(0xFFE2E8F0))
     }
   }
 }

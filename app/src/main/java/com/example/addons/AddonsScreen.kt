@@ -46,6 +46,11 @@ import com.example.ai.AiMarkdownView
 import com.example.ai.NotificationHelper
 import com.example.firebase.FirebaseManager
 import com.example.firebase.GoogleSignInHelper
+import com.example.reos.CHAT_AI_WEB_URL
+import com.example.reos.EMAIL_WEB_URL
+import com.example.reos.FORM_BUILDER_WEB_URL
+import com.example.reos.FORM_RESPONSES_WEB_URL
+import com.example.reos.ReosAccountManager
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.launch
 
@@ -54,7 +59,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun AddonsScreen(
   modifier: Modifier = Modifier,
-  onNavigateToWeather: (() -> Unit)? = null
+  onNavigateToWeather: (() -> Unit)? = null,
+  onNavigateToUrl: ((String) -> Unit)? = null
 ) {
   val context = LocalContext.current
   val keyboardController = LocalSoftwareKeyboardController.current
@@ -348,6 +354,12 @@ fun AddonsScreen(
         letterSpacing = 1.sp,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(top = 8.dp)
+      )
+
+      // Reos Account Addon Card (Authentication via users.json & ?user=username URL persistence)
+      ReosAccountAddonCard(
+        context = context,
+        onNavigateToUrl = onNavigateToUrl
       )
 
       // Firebase Cloud Sync Card (Google Sign-In & Firestore Persistence)
@@ -764,6 +776,319 @@ fun AddonExtensionToggle(
         checked = isEnabled,
         onCheckedChange = onToggle
       )
+    }
+  }
+}
+
+@Composable
+fun ReosAccountAddonCard(
+  context: Context,
+  onNavigateToUrl: ((String) -> Unit)? = null,
+  modifier: Modifier = Modifier
+) {
+  val coroutineScope = rememberCoroutineScope()
+  val keyboardController = LocalSoftwareKeyboardController.current
+
+  var loggedInUser by remember { mutableStateOf(ReosAccountManager.getLoggedInUsername(context)) }
+  var loggedInPic by remember { mutableStateOf(ReosAccountManager.getLoggedInPicture(context)) }
+
+  var usernameInput by remember { mutableStateOf("") }
+  var passwordInput by remember { mutableStateOf("") }
+  var passwordVisible by remember { mutableStateOf(false) }
+  var isAuthenticating by remember { mutableStateOf(false) }
+  var authErrorMessage by remember { mutableStateOf<String?>(null) }
+  var authSuccessMessage by remember { mutableStateOf<String?>(null) }
+
+  Card(
+    shape = RoundedCornerShape(22.dp),
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+    border = BorderStroke(1.dp, if (loggedInUser != null) Color(0x6622C55E) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+    modifier = modifier
+      .fillMaxWidth()
+      .testTag("addon_reos_account_card")
+  ) {
+    Column(
+      modifier = Modifier.padding(18.dp),
+      verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+      // Header
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(12.dp),
+          modifier = Modifier.weight(1f)
+        ) {
+          Box(
+            modifier = Modifier
+              .size(44.dp)
+              .clip(CircleShape)
+              .background(
+                if (loggedInUser != null) Color(0xFF15803D)
+                else MaterialTheme.colorScheme.primaryContainer
+              ),
+            contentAlignment = Alignment.Center
+          ) {
+            Icon(
+              imageVector = if (loggedInUser != null) Icons.Default.Badge else Icons.Default.AccountCircle,
+              contentDescription = null,
+              tint = if (loggedInUser != null) Color.White else MaterialTheme.colorScheme.onPrimaryContainer,
+              modifier = Modifier.size(24.dp)
+            )
+          }
+
+          Column {
+            Text(
+              text = "Reos Account",
+              fontWeight = FontWeight.Bold,
+              fontSize = 16.sp,
+              color = MaterialTheme.colorScheme.onSurface
+            )
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = if (loggedInUser != null) Color(0x3322C55E) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+              modifier = Modifier.padding(top = 2.dp)
+            ) {
+              Text(
+                text = if (loggedInUser != null) "✓ Linked (?user=$loggedInUser)" else "Authentication Required",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (loggedInUser != null) Color(0xFF16A34A) else MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+              )
+            }
+          }
+        }
+
+        if (loggedInUser != null) {
+          OutlinedButton(
+            onClick = {
+              ReosAccountManager.signOut(context)
+              loggedInUser = null
+              loggedInPic = null
+              usernameInput = ""
+              passwordInput = ""
+              authSuccessMessage = null
+              authErrorMessage = null
+              Toast.makeText(context, "Signed out of Reos Account", Toast.LENGTH_SHORT).show()
+            },
+            shape = RoundedCornerShape(12.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            modifier = Modifier.height(32.dp).testTag("reos_account_signout_btn")
+          ) {
+            Text("Sign Out", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+          }
+        }
+      }
+
+      if (loggedInUser != null) {
+        // --- LOGGED IN STATE ---
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          Text(
+            text = "Active Account: $loggedInUser",
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.primary
+          )
+          Text(
+            text = "Your username is securely saved. All web applications (Email, Form Builder, Form Responses, AI Chat) will automatically open with ?user=$loggedInUser appended.",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            lineHeight = 17.sp
+          )
+
+          // Preview url pill
+          Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+          ) {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Text(
+                text = "https://reostech.pagekite.me/emails.html?user=$loggedInUser",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Medium
+              )
+            }
+          }
+
+          if (onNavigateToUrl != null) {
+            Text("Quick Launch Linked Apps:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.outline)
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              FilledTonalButton(
+                onClick = { onNavigateToUrl(ReosAccountManager.formatAppUrl(context, EMAIL_WEB_URL)) },
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                modifier = Modifier.weight(1f).height(34.dp)
+              ) {
+                Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Email", fontSize = 11.sp)
+              }
+              FilledTonalButton(
+                onClick = { onNavigateToUrl(ReosAccountManager.formatAppUrl(context, FORM_BUILDER_WEB_URL)) },
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                modifier = Modifier.weight(1f).height(34.dp)
+              ) {
+                Icon(Icons.Default.DynamicForm, contentDescription = null, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Forms", fontSize = 11.sp)
+              }
+              FilledTonalButton(
+                onClick = { onNavigateToUrl(ReosAccountManager.formatAppUrl(context, FORM_RESPONSES_WEB_URL)) },
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                modifier = Modifier.weight(1f).height(34.dp)
+              ) {
+                Icon(Icons.Default.Poll, contentDescription = null, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Responses", fontSize = 11.sp)
+              }
+            }
+          }
+        }
+      } else {
+        // --- LOGIN FORM STATE ---
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          Text(
+            text = "Enter your Reos username and password. Credentials are verified securely against the Reos users database (users.json). Upon exact match, your username is attached to app URLs as ?user=username.",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            lineHeight = 17.sp
+          )
+
+          OutlinedTextField(
+            value = usernameInput,
+            onValueChange = {
+              usernameInput = it
+              authErrorMessage = null
+            },
+            label = { Text("Username", fontSize = 13.sp) },
+            placeholder = { Text("e.g. TEST or Reos2026", fontSize = 12.sp) },
+            leadingIcon = {
+              Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(18.dp))
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+              .fillMaxWidth()
+              .testTag("reos_account_username_input"),
+            colors = OutlinedTextFieldDefaults.colors(
+              focusedContainerColor = MaterialTheme.colorScheme.surface,
+              unfocusedContainerColor = MaterialTheme.colorScheme.surface
+            )
+          )
+
+          OutlinedTextField(
+            value = passwordInput,
+            onValueChange = {
+              passwordInput = it
+              authErrorMessage = null
+            },
+            label = { Text("Password", fontSize = 13.sp) },
+            placeholder = { Text("Exact password", fontSize = 12.sp) },
+            leadingIcon = {
+              Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
+            },
+            trailingIcon = {
+              IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                Icon(
+                  imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                  contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                  modifier = Modifier.size(18.dp)
+                )
+              }
+            },
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() }),
+            modifier = Modifier
+              .fillMaxWidth()
+              .testTag("reos_account_password_input"),
+            colors = OutlinedTextFieldDefaults.colors(
+              focusedContainerColor = MaterialTheme.colorScheme.surface,
+              unfocusedContainerColor = MaterialTheme.colorScheme.surface
+            )
+          )
+
+          authErrorMessage?.let { err ->
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+              Text(err, fontSize = 12.sp, color = MaterialTheme.colorScheme.error, lineHeight = 16.sp)
+            }
+          }
+
+          authSuccessMessage?.let { success ->
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF16A34A), modifier = Modifier.size(16.dp))
+              Text(success, fontSize = 12.sp, color = Color(0xFF16A34A), fontWeight = FontWeight.SemiBold)
+            }
+          }
+
+          Button(
+            onClick = {
+              keyboardController?.hide()
+              coroutineScope.launch {
+                isAuthenticating = true
+                authErrorMessage = null
+                authSuccessMessage = null
+                val result = ReosAccountManager.authenticate(context, usernameInput, passwordInput)
+                result.onSuccess { matchedUser ->
+                  loggedInUser = matchedUser
+                  loggedInPic = ReosAccountManager.getLoggedInPicture(context)
+                  authSuccessMessage = "Authenticated as $matchedUser! ?user=$matchedUser active."
+                  Toast.makeText(context, "Logged in as $matchedUser! URLs updated.", Toast.LENGTH_LONG).show()
+                }.onFailure { err ->
+                  authErrorMessage = err.message ?: "Authentication failed."
+                }
+                isAuthenticating = false
+              }
+            },
+            enabled = !isAuthenticating,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+              .fillMaxWidth()
+              .testTag("reos_account_login_button")
+          ) {
+            if (isAuthenticating) {
+              CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+              Spacer(Modifier.width(8.dp))
+              Text("Checking users.json...", fontSize = 13.sp)
+            } else {
+              Icon(Icons.Default.Key, contentDescription = null, modifier = Modifier.size(18.dp))
+              Spacer(Modifier.width(8.dp))
+              Text("Verify & Connect Reos Account", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
+          }
+
+          Text(
+            text = "Verified securely via HTTPS with https://reostech.pagekite.me/users.json",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.outline
+          )
+        }
+      }
     }
   }
 }

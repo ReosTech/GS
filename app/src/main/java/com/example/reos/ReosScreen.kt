@@ -55,6 +55,10 @@ const val DEFAULT_WEB_URL = "https://reostech.pagekite.me"
 const val REOS_TAB_URL = "https://reostech.pagekite.me"
 const val FALLBACK_WEB_URL = "https://reostech.pagekite.me"
 const val SEARCH_WEB_URL = "https://reostech.pagekite.me/search.html"
+const val EMAIL_WEB_URL = "https://reostech.pagekite.me/emails.html"
+const val FORM_BUILDER_WEB_URL = "https://reostech.pagekite.me/form_builder.html"
+const val FORM_RESPONSES_WEB_URL = "https://reostech.pagekite.me/responses.html"
+const val CHAT_AI_WEB_URL = "https://reostech.pagekite.me/chat.html"
 const val DESKTOP_USER_AGENT =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 

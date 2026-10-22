@@ -208,14 +208,7 @@ object AiService {
                   }
                 }
 
-                if (citations.isNotEmpty()) {
-                  textBuilder.append("\n\n---\n**Grounded Sources & Citations:**\n")
-                  citations.distinct().take(4).forEach { cite ->
-                    textBuilder.append("- ").append(cite).append("\n")
-                  }
-                } else if (queries.isNotEmpty()) {
-                  textBuilder.append("\n\n*Grounded with real-time Google Search: ${queries.joinToString(", ")}*")
-                }
+                // Citations and grounding annotations omitted per user preference
               }
 
               if (textBuilder.isNotBlank()) {

@@ -135,8 +135,8 @@ fun MainAppContainer(
         } else {
           ReosAppsScreen(
             onNavigateToWeather = { activeSubApp = "weather" },
-            onNavigateToReos = {
-              reosBrowserUrlRequest = com.example.reos.SEARCH_WEB_URL
+            onNavigateToReos = { targetUrl ->
+              reosBrowserUrlRequest = targetUrl
               reosBrowserUrlTimestamp = System.currentTimeMillis()
               currentTab = MainAppTab.REOS
               activeSubApp = null
@@ -159,6 +159,12 @@ fun MainAppContainer(
           onNavigateToWeather = {
             currentTab = MainAppTab.REOS_APPS
             activeSubApp = "weather"
+          },
+          onNavigateToUrl = { targetUrl ->
+            reosBrowserUrlRequest = targetUrl
+            reosBrowserUrlTimestamp = System.currentTimeMillis()
+            currentTab = MainAppTab.REOS
+            activeSubApp = null
           }
         )
       }

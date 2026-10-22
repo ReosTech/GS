@@ -38,15 +38,7 @@ object LocalAiEngine {
       else -> generateGeneralResponse(clean, lower)
     }
 
-    // Append grounding annotations if tools were active
-    return if (useSearchGrounding || useMapsGrounding) {
-      val toolsList = mutableListOf<String>()
-      if (useSearchGrounding) toolsList.add("🔍 Google Search")
-      if (useMapsGrounding) toolsList.add("🗺️ Google Maps")
-      "$baseResult\n\n---\n*Grounded with live ${toolsList.joinToString(" & ")} data (gemini-3.8-flash)*"
-    } else {
-      baseResult
-    }
+    return baseResult
   }
 
   private fun generateGeneralResponse(clean: String, lower: String): String {

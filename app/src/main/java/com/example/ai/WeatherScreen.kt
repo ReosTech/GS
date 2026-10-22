@@ -227,6 +227,10 @@ fun WeatherScreen(
 
       result.onSuccess { advice ->
         aiWeatherAdvice = advice
+          .replace(Regex("""(?i)\n*---\s*\n*\*?Grounded with[^\n]*\*?"""), "")
+          .replace(Regex("""(?i)\*?Grounded with[^\n]*\*?"""), "")
+          .replace(Regex("""(?i)\n*---\s*\n*\*\*Grounded Sources[^\n]*\*\*.*""", RegexOption.DOT_MATCHES_ALL), "")
+          .trim()
         isAiAdviceLoading = false
       }.onFailure {
         aiWeatherAdvice = """
@@ -744,8 +748,15 @@ fun WeatherScreen(
               }
 
               if (aiWeatherAdvice != null) {
+                val displayAdvice = remember(aiWeatherAdvice) {
+                  aiWeatherAdvice.orEmpty()
+                    .replace(Regex("""(?i)\n*---\s*\n*\*?Grounded with[^\n]*\*?"""), "")
+                    .replace(Regex("""(?i)\*?Grounded with[^\n]*\*?"""), "")
+                    .replace(Regex("""(?i)\n*---\s*\n*\*\*Grounded Sources[^\n]*\*\*.*""", RegexOption.DOT_MATCHES_ALL), "")
+                    .trim()
+                }
                 AiMarkdownView(
-                  content = aiWeatherAdvice ?: "",
+                  content = displayAdvice,
                   textColor = MaterialTheme.colorScheme.onTertiaryContainer,
                   modifier = Modifier.fillMaxWidth()
                 )
