@@ -10,12 +10,61 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.text.HtmlCompat
 import com.example.MainActivity
 
 object NotificationHelper {
   const val CHANNEL_AI_FEATURES = "ai_features_channel"
   const val CHANNEL_AI_WEATHER = "ai_weather_channel"
   const val CHANNEL_AI_GEN = "ai_generation_channel"
+
+  /**
+   * Converts standard Markdown syntax (bold, italic, headers, inline code, bullets, links)
+   * into rich Spanned text for NotificationCompat styling.
+   */
+  fun renderMarkdownToSpanned(markdown: String): CharSequence {
+    if (markdown.isBlank()) return ""
+
+    var html = markdown.replace("\r\n", "\n")
+
+    // Escape raw HTML entities to prevent malformed tags while preserving structure
+    html = html
+      .replace("&", "&amp;")
+      .replace("<", "&lt;")
+      .replace(">", "&gt;")
+
+    // Headings (e.g. ### Title -> <b>Title</b><br>)
+    html = html.replace(Regex("(?m)^#{1,6}\\s+(.+)$"), "<b>$1</b><br>")
+
+    // Bold (**text** or __text__)
+    html = html.replace(Regex("\\*\\*(.+?)\\*\\*"), "<b>$1</b>")
+    html = html.replace(Regex("__(.+?)__"), "<b>$1</b>")
+
+    // Italic (*text* or _text_)
+    html = html.replace(Regex("(?<!\\*)\\*(?!\\*)(.+?)(?<!\\*)\\*(?!\\*)"), "<i>$1</i>")
+    html = html.replace(Regex("(?<!_)_(?!_)(.+?)(?<!_)_(?!_)"), "<i>$1</i>")
+
+    // Inline code (`code` -> <tt><font color="#0284c7">code</font></tt>)
+    html = html.replace(Regex("`([^`]+)`"), "<tt><font color=\"#0284c7\">$1</font></tt>")
+
+    // Bullet points (- item or * item -> • item<br>)
+    html = html.replace(Regex("(?m)^[\\*\\-]\\s+(.+)$"), "• $1<br>")
+
+    // Numbered lists (1. item -> 1. item<br>)
+    html = html.replace(Regex("(?m)^(\\d+)\\.\\s+(.+)$"), "$1. $2<br>")
+
+    // Markdown Links: [title](url) -> <a href="url"><b>title</b></a>
+    html = html.replace(Regex("\\[([^\\]]+)\\]\\(([^\\)]+)\\)"), "<a href=\"$2\"><b>$1</b></a>")
+
+    // Blockquotes (> quote)
+    html = html.replace(Regex("(?m)^>\\s*(.+)$"), "<i>\"$1\"</i><br>")
+
+    // Newlines: double break -> <br><br>, single -> <br>
+    html = html.replace("\n\n", "<br><br>")
+    html = html.replace("\n", "<br>")
+
+    return HtmlCompat.fromHtml(html, HtmlCompat.FROM_HTML_MODE_LEGACY)
+  }
 
   fun createNotificationChannels(context: Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -96,11 +145,15 @@ object NotificationHelper {
       PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
     )
 
+    // Render markdown to rich spanned CharSequence for title & message
+    val renderedTitle = renderMarkdownToSpanned(title)
+    val renderedMessage = renderMarkdownToSpanned(message)
+
     val builder = NotificationCompat.Builder(context, channelId)
       .setSmallIcon(android.R.drawable.ic_dialog_info)
-      .setContentTitle(title)
-      .setContentText(message)
-      .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+      .setContentTitle(renderedTitle)
+      .setContentText(renderedMessage)
+      .setStyle(NotificationCompat.BigTextStyle().bigText(renderedMessage))
       .setPriority(
         if (channelId == CHANNEL_AI_WEATHER) NotificationCompat.PRIORITY_HIGH
         else NotificationCompat.PRIORITY_DEFAULT
@@ -126,11 +179,11 @@ object NotificationHelper {
     condition: String,
     advice: String? = null
   ) {
-    val title = "🌤️ $cityName: ${temp.toInt()}°C $condition"
+    val title = "🌤️ **$cityName**: **${temp.toInt()}°C** *($condition)*"
     val body = if (!advice.isNullOrBlank()) {
-      "$advice\n\nTap to view full real-time hourly & 7-day forecast."
+      "$advice\n\n- **Live condition**: $condition\n- **Temperature**: ${temp.toInt()}°C\n\n*Tap to open 3D interactive weather map & 7-day forecast.*"
     } else {
-      "Current real-time weather in $cityName is ${temp.toInt()}°C with $condition. Tap for live maps and radar."
+      "Current real-time weather in **$cityName** is **${temp.toInt()}°C** with *$condition*.\n\n- Tap for live 3D atmosphere and radar."
     }
     sendAiNotification(
       context = context,

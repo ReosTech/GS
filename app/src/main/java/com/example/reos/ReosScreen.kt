@@ -75,7 +75,8 @@ fun ReosScreen(
 ) {
   val context = LocalContext.current
   val coroutineScope = rememberCoroutineScope()
-  val safeInitialUrl = if (initialUrl.contains("pgekite.me")) FALLBACK_WEB_URL else initialUrl
+  val rawInitial = if (initialUrl.contains("pgekite.me")) FALLBACK_WEB_URL else initialUrl
+  val safeInitialUrl = ReosAccountManager.formatAppUrl(context, rawInitial)
   var targetUrl by remember(initialUrl) { mutableStateOf(safeInitialUrl) }
   var currentLoadedUrl by remember(initialUrl) { mutableStateOf(safeInitialUrl) }
   var pageTitle by remember { mutableStateOf("Reos app") }
@@ -157,23 +158,40 @@ fun ReosScreen(
     }
   }
 
+  // Silently ensure URL has ?user=username whenever active and account is linked
+  LaunchedEffect(isActiveTab) {
+    if (isActiveTab) {
+      val loggedUser = ReosAccountManager.getLoggedInUsername(context)
+      if (!loggedUser.isNullOrBlank() && !currentLoadedUrl.contains("user=")) {
+        val updatedUrl = ReosAccountManager.formatAppUrl(context, currentLoadedUrl)
+        if (updatedUrl != currentLoadedUrl) {
+          targetUrl = updatedUrl
+          currentLoadedUrl = updatedUrl
+          webViewRef?.loadUrl(updatedUrl)
+        }
+      }
+    }
+  }
+
   // Load URL whenever external request is triggered (e.g. from Reos Browser tile)
   LaunchedEffect(loadUrlRequest, urlRequestTimestamp) {
     if (!loadUrlRequest.isNullOrBlank()) {
-      targetUrl = loadUrlRequest
-      currentLoadedUrl = loadUrlRequest
+      val formatted = ReosAccountManager.formatAppUrl(context, loadUrlRequest)
+      targetUrl = formatted
+      currentLoadedUrl = formatted
       isWebError = false
       isOffline = false
-      webViewRef?.loadUrl(loadUrlRequest)
+      webViewRef?.loadUrl(formatted)
     }
   }
 
   // Failover watchdog if legacy pgekite URL is encountered
   LaunchedEffect(targetUrl, webViewInstanceKey) {
     if (targetUrl.contains("pgekite")) {
-      targetUrl = FALLBACK_WEB_URL
-      currentLoadedUrl = FALLBACK_WEB_URL
-      webViewRef?.loadUrl(FALLBACK_WEB_URL)
+      val safeFallback = ReosAccountManager.formatAppUrl(context, FALLBACK_WEB_URL)
+      targetUrl = safeFallback
+      currentLoadedUrl = safeFallback
+      webViewRef?.loadUrl(safeFallback)
     }
   }
 
@@ -206,6 +224,14 @@ fun ReosScreen(
                 val uri = request?.url ?: return false
                 val scheme = uri.scheme?.lowercase() ?: ""
                 if (scheme == "http" || scheme == "https") {
+                  val originalUrl = uri.toString()
+                  val formattedUrl = ReosAccountManager.formatAppUrl(context, originalUrl)
+                  if (formattedUrl != originalUrl) {
+                    targetUrl = formattedUrl
+                    currentLoadedUrl = formattedUrl
+                    view?.loadUrl(formattedUrl)
+                    return true
+                  }
                   return false
                 }
                 try {
@@ -520,11 +546,12 @@ fun ReosScreen(
             ) {
               OutlinedButton(
                 onClick = {
-                  targetUrl = FALLBACK_WEB_URL
-                  currentLoadedUrl = FALLBACK_WEB_URL
+                  val backup = ReosAccountManager.formatAppUrl(context, FALLBACK_WEB_URL)
+                  targetUrl = backup
+                  currentLoadedUrl = backup
                   isWebError = false
                   isOffline = false
-                  webViewRef?.loadUrl(FALLBACK_WEB_URL)
+                  webViewRef?.loadUrl(backup)
                 },
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.weight(1f)
@@ -533,8 +560,9 @@ fun ReosScreen(
               }
               Button(
                 onClick = {
-                  targetUrl = REOS_TAB_URL
-                  currentLoadedUrl = REOS_TAB_URL
+                  val retry = ReosAccountManager.formatAppUrl(context, REOS_TAB_URL)
+                  targetUrl = retry
+                  currentLoadedUrl = retry
                   isWebError = false
                   isOffline = false
                   webViewInstanceKey++
@@ -605,6 +633,8 @@ fun ReosScreen(
       Column(
         modifier = Modifier
           .fillMaxWidth()
+          .widthIn(max = 600.dp)
+          .align(Alignment.CenterHorizontally)
           .padding(horizontal = 20.dp)
           .padding(bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
@@ -812,9 +842,10 @@ fun ReosScreen(
         ) {
           OutlinedButton(
             onClick = {
-              targetUrl = DEFAULT_WEB_URL
-              currentLoadedUrl = DEFAULT_WEB_URL
-              webViewRef?.loadUrl(DEFAULT_WEB_URL)
+              val home = ReosAccountManager.formatAppUrl(context, DEFAULT_WEB_URL)
+              targetUrl = home
+              currentLoadedUrl = home
+              webViewRef?.loadUrl(home)
               showQuickActionsSheet = false
             },
             modifier = Modifier.weight(1f),
@@ -824,9 +855,10 @@ fun ReosScreen(
           }
           OutlinedButton(
             onClick = {
-              targetUrl = SEARCH_WEB_URL
-              currentLoadedUrl = SEARCH_WEB_URL
-              webViewRef?.loadUrl(SEARCH_WEB_URL)
+              val search = ReosAccountManager.formatAppUrl(context, SEARCH_WEB_URL)
+              targetUrl = search
+              currentLoadedUrl = search
+              webViewRef?.loadUrl(search)
               showQuickActionsSheet = false
             },
             modifier = Modifier.weight(1f),
@@ -895,8 +927,10 @@ fun ReosScreen(
             if (!finalUrl.startsWith("http://") && !finalUrl.startsWith("https://")) {
               finalUrl = "https://$finalUrl"
             }
-            targetUrl = finalUrl
-            webViewRef?.loadUrl(finalUrl)
+            val formatted = ReosAccountManager.formatAppUrl(context, finalUrl)
+            targetUrl = formatted
+            currentLoadedUrl = formatted
+            webViewRef?.loadUrl(formatted)
             showUrlDialog = false
           }
         ) {

@@ -41,6 +41,7 @@ enum class MainAppTab(val title: String) {
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    com.example.firebase.configureAppCheck(this, intent)
     enableEdgeToEdge()
     // Create notification channels for weather briefings and alerts
     NotificationHelper.createNotificationChannels(this)
@@ -72,6 +73,7 @@ fun MainAppContainer(
   initialTab: MainAppTab = MainAppTab.REOS,
   initialSubApp: String? = null
 ) {
+  val context = androidx.compose.ui.platform.LocalContext.current
   var currentTab by remember { mutableStateOf(initialTab) }
   var activeSubApp by remember { mutableStateOf(initialSubApp) }
   var reosBrowserUrlRequest by remember { mutableStateOf<String?>(null) }
@@ -136,7 +138,8 @@ fun MainAppContainer(
           ReosAppsScreen(
             onNavigateToWeather = { activeSubApp = "weather" },
             onNavigateToReos = { targetUrl ->
-              reosBrowserUrlRequest = targetUrl
+              val formatted = com.example.reos.ReosAccountManager.formatAppUrl(context, targetUrl)
+              reosBrowserUrlRequest = formatted
               reosBrowserUrlTimestamp = System.currentTimeMillis()
               currentTab = MainAppTab.REOS
               activeSubApp = null
@@ -161,7 +164,8 @@ fun MainAppContainer(
             activeSubApp = "weather"
           },
           onNavigateToUrl = { targetUrl ->
-            reosBrowserUrlRequest = targetUrl
+            val formatted = com.example.reos.ReosAccountManager.formatAppUrl(context, targetUrl)
+            reosBrowserUrlRequest = formatted
             reosBrowserUrlTimestamp = System.currentTimeMillis()
             currentTab = MainAppTab.REOS
             activeSubApp = null

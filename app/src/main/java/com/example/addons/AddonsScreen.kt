@@ -155,17 +155,24 @@ fun AddonsScreen(
     ).show()
   }
 
-  Column(
+  Box(
     modifier = modifier
       .fillMaxSize()
-      .background(MaterialTheme.colorScheme.background)
+      .background(MaterialTheme.colorScheme.background),
+    contentAlignment = Alignment.TopCenter
   ) {
-    // Top App Bar
-    Surface(
-      color = MaterialTheme.colorScheme.surface,
-      tonalElevation = 2.dp,
-      modifier = Modifier.fillMaxWidth()
+    Column(
+      modifier = Modifier
+        .fillMaxHeight()
+        .fillMaxWidth()
+        .widthIn(max = 680.dp)
     ) {
+      // Top App Bar
+      Surface(
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 2.dp,
+        modifier = Modifier.fillMaxWidth()
+      ) {
       Row(
         modifier = Modifier
           .fillMaxWidth()
@@ -297,8 +304,8 @@ fun AddonsScreen(
             onClick = {
               NotificationHelper.sendAiNotification(
                 context = context,
-                title = "⚡ Weather Alert Briefing",
-                message = "Current temp 21°C with clear skies. Recommended: light layers and hydration.",
+                title = "⚡ **Weather Alert Briefing**",
+                message = "Current temp **21°C** with *clear skies*.\n\n### Forecast Highlights\n- Wind speed: `12 km/h`\n- Humidity: `45%`\n- Advice: *Light layers & hydration recommended.*",
                 subText = "Weather Add-on"
               )
               Toast.makeText(context, "Test notification dispatched!", Toast.LENGTH_SHORT).show()
@@ -628,8 +635,7 @@ fun AddonsScreen(
       Spacer(Modifier.height(88.dp))
     }
   }
-
-
+}
 }
 
 @Composable
@@ -1034,8 +1040,8 @@ fun ReosAccountAddonCard(
                 result.onSuccess { matchedUser ->
                   loggedInUser = matchedUser
                   loggedInPic = ReosAccountManager.getLoggedInPicture(context)
-                  authSuccessMessage = "Authenticated as $matchedUser! ?user=$matchedUser active."
-                  Toast.makeText(context, "Logged in as $matchedUser! URLs updated.", Toast.LENGTH_LONG).show()
+                  authSuccessMessage = "Account connected successfully"
+                  Toast.makeText(context, "Welcome, $matchedUser!", Toast.LENGTH_SHORT).show()
                 }.onFailure { err ->
                   authErrorMessage = err.message ?: "Authentication failed."
                 }

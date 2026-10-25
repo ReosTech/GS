@@ -3,8 +3,11 @@ package com.example.ai
 import android.content.Context
 import android.util.Log
 import com.example.BuildConfig
+import com.google.firebase.Firebase
+import com.google.firebase.ai.ai
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -32,7 +35,7 @@ object AiService {
   fun getEffectiveApiKey(context: Context? = null): String {
     if (userCustomApiKey.isNotBlank()) return userCustomApiKey
     val buildKey = BuildConfig.GEMINI_API_KEY
-    if (buildKey.isNotBlank() && buildKey != "MY_GEMINI_API_KEY") return buildKey
+    if (buildKey.isNotBlank() && buildKey != "MY_GEMINI_API_KEY" && buildKey != "your_api_key_here") return buildKey
     if (context != null) {
       val prefs = context.getSharedPreferences("ai_settings", Context.MODE_PRIVATE)
       val saved = prefs.getString("gemini_api_key", "") ?: ""
@@ -72,6 +75,24 @@ object AiService {
   ): Result<String> = withContext(Dispatchers.IO) {
     val apiKey = getEffectiveApiKey(context)
     val resolvedModel = resolveModelName(model)
+
+    // 1. First-class Firebase AI Logic inference (Gemini API with App Check attestation)
+    if (!useSearchGrounding && !useMapsGrounding && history.isEmpty() && systemInstruction == null) {
+      try {
+        val generativeModel = Firebase.ai.generativeModel(resolvedModel)
+        val response = withTimeout(30_000L) {
+          generativeModel.generateContent(prompt)
+        }
+        val text = response.text
+        if (!text.isNullOrBlank()) {
+          return@withContext Result.success(text)
+        }
+      } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        Log.d(TAG, "Firebase AI Logic inference note: ${e.message}")
+      }
+    }
 
     if (apiKey.isNotBlank()) {
       try {
@@ -235,6 +256,35 @@ object AiService {
     Result.success(localResult)
   }
 
+  data class MoonInfo(
+    val phaseName: String,
+    val illuminationPercent: Int,
+    val moonEmoji: String,
+    val description: String
+  )
+
+  fun calculateMoonPhase(timeMillis: Long = System.currentTimeMillis()): MoonInfo {
+    val epoch = 947182440000L // Jan 6, 2000, 18:14 UTC
+    val synodicMonth = 29.53058867 * 24 * 60 * 60 * 1000.0
+    val diff = (timeMillis - epoch) % synodicMonth
+    val normalized = if (diff < 0) diff + synodicMonth else diff
+    val phaseDay = normalized / (24 * 60 * 60 * 1000.0)
+    val fraction = phaseDay / 29.53058867
+    val illumination = ((1.0 - kotlin.math.cos(fraction * 2.0 * Math.PI)) / 2.0 * 100.0).toInt().coerceIn(0, 100)
+
+    return when {
+      phaseDay < 1.84 -> MoonInfo("New Moon", illumination, "🌑", "Minimal moonlight; pristine dark sky observation")
+      phaseDay < 5.53 -> MoonInfo("Waxing Crescent", illumination, "🌒", "Delicate crescent visible in evening twilight")
+      phaseDay < 9.22 -> MoonInfo("First Quarter", illumination, "🌓", "Half moon illuminated in evening sky")
+      phaseDay < 12.91 -> MoonInfo("Waxing Gibbous", illumination, "🌔", "Bright moon illuminating late evening atmosphere")
+      phaseDay < 16.61 -> MoonInfo("Full Moon", illumination, "🌕", "Peak lunar illumination casting clear shadows")
+      phaseDay < 20.30 -> MoonInfo("Waning Gibbous", illumination, "🌖", "Radiant moon rising in early night")
+      phaseDay < 23.99 -> MoonInfo("Last Quarter", illumination, "🌗", "Half moon illuminated in late night & dawn")
+      phaseDay < 27.68 -> MoonInfo("Waning Crescent", illumination, "🌘", "Slender crescent visible before dawn")
+      else -> MoonInfo("New Moon", illumination, "🌑", "Dark sky with clear stellar visibility")
+    }
+  }
+
   // --- Real-time Weather Fetcher using Open-Meteo ---
   data class WeatherData(
     val cityName: String,
@@ -251,6 +301,7 @@ object AiService {
     val isDay: Boolean,
     val sunrise: String = "06:00",
     val sunset: String = "19:30",
+    val moonInfo: MoonInfo = calculateMoonPhase(),
     val isLiveLocation: Boolean = false,
     val isPreciseLocation: Boolean = true,
     val accuracyMeters: Float = 15f,
@@ -265,7 +316,8 @@ object AiService {
     val temp: Double,
     val weatherCode: Int,
     val precipProb: Int = 0,
-    val humidity: Int = 50
+    val humidity: Int = 50,
+    val isDay: Boolean = true
   )
 
   data class DailyWeather(
@@ -292,7 +344,7 @@ object AiService {
       // Query Open-Meteo high accuracy forecast with comprehensive meteorological variables
       val forecastUrl = "https://api.open-meteo.com/v1/forecast?latitude=$latitude&longitude=$longitude" +
         "&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,surface_pressure,uv_index" +
-        "&hourly=temperature_2m,relative_humidity_2m,weather_code,precipitation_probability" +
+        "&hourly=temperature_2m,relative_humidity_2m,weather_code,precipitation_probability,is_day" +
         "&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_probability_max" +
         "&timezone=auto"
 
@@ -326,6 +378,7 @@ object AiService {
         val humidities = hourly.optJSONArray("relative_humidity_2m")
         val codes = hourly.optJSONArray("weather_code")
         val precipProbs = hourly.optJSONArray("precipitation_probability")
+        val isDayList = hourly.optJSONArray("is_day")
 
         if (times != null && temps != null && codes != null) {
           val count = minOf(24, times.length())
@@ -336,7 +389,8 @@ object AiService {
             val code = codes.optInt(i, weatherCode)
             val prob = precipProbs?.optInt(i, 0) ?: 0
             val hum = humidities?.optInt(i, humidity) ?: humidity
-            hourlyList.add(HourlyWeather(hourStr, temp, code, prob, hum))
+            val itemIsDay = if (isDayList != null && i < isDayList.length()) isDayList.optInt(i, 1) == 1 else true
+            hourlyList.add(HourlyWeather(hourStr, temp, code, prob, hum, itemIsDay))
           }
         }
       }
@@ -394,7 +448,7 @@ object AiService {
         }
       }
 
-      val weatherDesc = getWeatherDescription(weatherCode)
+      val weatherDesc = getWeatherDescription(weatherCode, isDay)
 
       Result.success(
         WeatherData(
@@ -466,20 +520,22 @@ object AiService {
     }
   }
 
-  fun getWeatherDescription(code: Int): String {
+  fun getWeatherDescription(code: Int, isDay: Boolean = true): String {
     return when (code) {
-      0 -> "Clear sky"
-      1, 2, 3 -> "Partly cloudy"
-      45, 48 -> "Foggy"
-      51, 53, 55 -> "Drizzle"
-      61, 63, 65 -> "Rain"
-      71, 73, 75 -> "Snowfall"
+      0 -> if (isDay) "Clear sky" else "Clear starry night"
+      1 -> if (isDay) "Mainly clear" else "Mainly clear night"
+      2 -> if (isDay) "Partly cloudy" else "Partly cloudy night"
+      3 -> if (isDay) "Overcast clouds" else "Overcast night"
+      45, 48 -> if (isDay) "Foggy" else "Night fog & mist"
+      51, 53, 55 -> if (isDay) "Drizzle" else "Night drizzle"
+      61, 63, 65 -> if (isDay) "Rain" else "Night rainfall"
+      71, 73, 75 -> if (isDay) "Snowfall" else "Moonlit snowfall"
       77 -> "Snow grains"
-      80, 81, 82 -> "Rain showers"
-      85, 86 -> "Snow showers"
-      95 -> "Thunderstorm"
-      96, 99 -> "Thunderstorm with hail"
-      else -> "Cloudy & mild"
+      80, 81, 82 -> if (isDay) "Rain showers" else "Night rain showers"
+      85, 86 -> if (isDay) "Snow showers" else "Night snow showers"
+      95 -> if (isDay) "Thunderstorm" else "Night thunderstorm"
+      96, 99 -> if (isDay) "Thunderstorm with hail" else "Night storm with hail"
+      else -> if (isDay) "Cloudy & mild" else "Cool cloudy night"
     }
   }
 }

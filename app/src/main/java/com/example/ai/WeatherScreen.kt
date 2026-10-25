@@ -16,6 +16,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -75,6 +76,10 @@ fun WeatherScreen(
 
   // Notification status
   var notificationSentMessage by remember { mutableStateOf<String?>(null) }
+
+  // Day/Night preview mode (null = Live Auto, true = Forced Day, false = Forced Night)
+  var dayNightModeOverride by remember { mutableStateOf<Boolean?>(null) }
+  val effectiveIsDay = dayNightModeOverride ?: (weatherData?.isDay ?: true)
 
   val popularCities = listOf("San Francisco", "New York", "London", "Tokyo", "Paris", "Sydney")
 
@@ -331,7 +336,10 @@ fun WeatherScreen(
 
       Column(
         modifier = Modifier
-          .fillMaxSize()
+          .fillMaxHeight()
+          .fillMaxWidth()
+          .widthIn(max = 680.dp)
+          .align(Alignment.TopCenter)
           .verticalScroll(scrollState)
       ) {
         // --- 1. HERO SECTION: TEMP BAR ABOVE & 3D VIEW BELOW (Fades out when scrolled down) ---
@@ -499,7 +507,16 @@ fun WeatherScreen(
           // UNIFIED HERO WINDOW: Temp bar above & 3D view below in the SAME WINDOW
           DynamicTemperatureHud(
             data = data,
-            onTriggerNotification = { triggerWeatherNotification() }
+            onTriggerNotification = { triggerWeatherNotification() },
+            isEffectiveDay = effectiveIsDay,
+            dayNightModeOverride = dayNightModeOverride,
+            onToggleDayNight = {
+              dayNightModeOverride = when (dayNightModeOverride) {
+                null -> false // from Auto -> Force Night
+                false -> true  // from Force Night -> Force Day
+                true -> null  // from Force Day -> back to Auto
+              }
+            }
           )
 
           // Bottom Section: Animated Scroll Down Indicator
@@ -631,6 +648,59 @@ fun WeatherScreen(
                 Column(modifier = Modifier.weight(1f)) {
                   Text("Sunset", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
                   Text(data.sunset, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                }
+              }
+              HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Column(modifier = Modifier.weight(1f)) {
+                  Text("Lunar & Night Astronomy", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                  Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(top = 2.dp)
+                  ) {
+                    Text(data.moonInfo.moonEmoji, fontSize = 18.sp)
+                    Text(
+                      "${data.moonInfo.phaseName} • ${data.moonInfo.illuminationPercent}%",
+                      fontSize = 13.sp,
+                      fontWeight = FontWeight.SemiBold,
+                      color = MaterialTheme.colorScheme.onSurface
+                    )
+                  }
+                  Text(
+                    data.moonInfo.description,
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(top = 1.dp)
+                  )
+                }
+                Surface(
+                  shape = RoundedCornerShape(12.dp),
+                  color = if (effectiveIsDay) Color(0x22F59E0B) else Color(0x33818CF8),
+                  border = BorderStroke(1.dp, if (effectiveIsDay) Color(0xFFF59E0B) else Color(0xFF818CF8))
+                ) {
+                  Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                  ) {
+                    Icon(
+                      if (effectiveIsDay) Icons.Default.WbSunny else Icons.Default.NightlightRound,
+                      contentDescription = null,
+                      tint = if (effectiveIsDay) Color(0xFFF59E0B) else Color(0xFF818CF8),
+                      modifier = Modifier.size(13.dp)
+                    )
+                    Text(
+                      if (effectiveIsDay) "Daylight Active" else "Night Active",
+                      fontSize = 11.sp,
+                      fontWeight = FontWeight.SemiBold,
+                      color = if (effectiveIsDay) Color(0xFFF59E0B) else Color(0xFF818CF8)
+                    )
+                  }
                 }
               }
             }
@@ -802,6 +872,7 @@ fun WeatherScreen(
         Surface(
           modifier = Modifier
             .fillMaxWidth()
+            .widthIn(max = 680.dp)
             .padding(horizontal = 16.dp, vertical = 8.dp),
           shape = RoundedCornerShape(24.dp),
           color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.94f),
@@ -836,9 +907,10 @@ fun WeatherScreen(
               }
               Icon(
                 imageVector = when {
-                  data.weatherCode in 0..1 -> if (data.isDay) Icons.Default.WbSunny else Icons.Default.NightlightRound
-                  data.weatherCode in 2..3 -> Icons.Default.Cloud
+                  data.weatherCode in 0..1 -> if (effectiveIsDay) Icons.Default.WbSunny else Icons.Default.NightlightRound
+                  data.weatherCode in 2..3 -> if (effectiveIsDay) Icons.Default.Cloud else Icons.Default.NightsStay
                   data.weatherCode in 51..67 || data.weatherCode in 80..82 -> Icons.Default.WaterDrop
+                  data.weatherCode in 71..77 || data.weatherCode in 85..86 -> Icons.Default.AcUnit
                   data.weatherCode >= 95 -> Icons.Default.Thunderstorm
                   else -> Icons.Default.CloudQueue
                 },
@@ -891,9 +963,14 @@ fun WeatherStatItem(
 
 @Composable
 fun HourlyItemCard(item: AiService.HourlyWeather) {
+  val isNight = !item.isDay
   Card(
     shape = RoundedCornerShape(14.dp),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    colors = CardDefaults.cardColors(
+      containerColor = if (isNight) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
+                       else MaterialTheme.colorScheme.surface
+    ),
+    border = if (isNight) BorderStroke(1.dp, Color(0x33818CF8)) else null,
     modifier = Modifier.width(68.dp)
   ) {
     Column(
@@ -901,15 +978,22 @@ fun HourlyItemCard(item: AiService.HourlyWeather) {
       horizontalAlignment = Alignment.CenterHorizontally,
       verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-      Text(item.time, fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+      Text(
+        item.time,
+        fontSize = 11.sp,
+        color = if (isNight) Color(0xFFA5B4FC) else MaterialTheme.colorScheme.outline,
+        fontWeight = if (isNight) FontWeight.SemiBold else FontWeight.Normal
+      )
       val icon = when {
-        item.weatherCode in 0..1 -> Icons.Default.WbSunny
-        item.weatherCode in 2..3 -> Icons.Default.Cloud
+        item.weatherCode in 0..1 -> if (item.isDay) Icons.Default.WbSunny else Icons.Default.NightlightRound
+        item.weatherCode in 2..3 -> if (item.isDay) Icons.Default.Cloud else Icons.Default.NightsStay
         item.weatherCode in 51..67 || item.weatherCode in 80..82 -> Icons.Default.WaterDrop
+        item.weatherCode in 71..77 || item.weatherCode in 85..86 -> Icons.Default.AcUnit
         item.weatherCode >= 95 -> Icons.Default.Thunderstorm
         else -> Icons.Default.CloudQueue
       }
-      Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+      val iconTint = if (isNight) Color(0xFFA5B4FC) else MaterialTheme.colorScheme.primary
+      Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp))
       Text("${item.temp.toInt()}°", fontWeight = FontWeight.Bold, fontSize = 13.sp)
       if (item.precipProb > 10) {
         Text("${item.precipProb}%", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
@@ -924,7 +1008,10 @@ fun HourlyItemCard(item: AiService.HourlyWeather) {
 fun DynamicTemperatureHud(
   data: AiService.WeatherData,
   onTriggerNotification: () -> Unit,
-  modifier: Modifier = Modifier
+  modifier: Modifier = Modifier,
+  isEffectiveDay: Boolean = data.isDay,
+  dayNightModeOverride: Boolean? = null,
+  onToggleDayNight: () -> Unit = {}
 ) {
   val infiniteTransition = rememberInfiniteTransition(label = "pulse")
   val pulseAlpha by infiniteTransition.animateFloat(
@@ -937,22 +1024,36 @@ fun DynamicTemperatureHud(
     label = "pulseAlpha"
   )
 
-  // Dynamic Theme Accent based on Temperature
+  // Dynamic Theme Accent based on Temperature & Day/Night
   val tempColor = when {
+    !isEffectiveDay -> if (data.currentTemp >= 24.0) Color(0xFFC084FC) else Color(0xFF818CF8) // Mystical Moonlit Violet / Indigo
     data.currentTemp >= 26.0 -> Color(0xFFF59E0B) // Radiant Warm Amber / Orange
     data.currentTemp in 16.0..25.9 -> Color(0xFF10B981) // Pleasant Emerald / Mint
     else -> Color(0xFF38BDF8) // Crisp Alpine Cyan / Sky
   }
 
-  val dynamicAtmosphere = when {
-    data.currentTemp >= 28.0 -> "Hot & Radiant Sunshine"
-    data.currentTemp >= 22.0 && data.windSpeed < 15.0 -> "Warm & Pleasant Calm"
-    data.currentTemp >= 20.0 && data.windSpeed >= 15.0 -> "Warm & Breezy Atmosphere"
-    data.currentTemp in 12.0..19.9 && data.windSpeed >= 18.0 -> "Cool & Brisk Winds"
-    data.currentTemp in 10.0..19.9 -> "Mild & Refreshing Air"
-    data.currentTemp in 1.0..9.9 -> "Chilly & Crisp Climate"
-    data.currentTemp <= 0.0 -> "Freezing Sub-Zero Frost"
-    else -> data.weatherDesc
+  val dynamicAtmosphere = if (!isEffectiveDay) {
+    when {
+      data.currentTemp >= 26.0 -> "Warm & Starry Tropical Night"
+      data.currentTemp >= 20.0 && data.windSpeed < 15.0 -> "Pleasant Moonlit Calm"
+      data.currentTemp >= 18.0 && data.windSpeed >= 15.0 -> "Breezy Night Atmosphere"
+      data.currentTemp in 12.0..17.9 && data.windSpeed >= 18.0 -> "Crisp & Windy Night"
+      data.currentTemp in 10.0..17.9 -> "Cool Moonlit Evening"
+      data.currentTemp in 1.0..9.9 -> "Chilly Starry Night"
+      data.currentTemp <= 0.0 -> "Freezing Moonlight & Frost"
+      else -> "Quiet Night Atmosphere"
+    }
+  } else {
+    when {
+      data.currentTemp >= 28.0 -> "Hot & Radiant Sunshine"
+      data.currentTemp >= 22.0 && data.windSpeed < 15.0 -> "Warm & Pleasant Calm"
+      data.currentTemp >= 20.0 && data.windSpeed >= 15.0 -> "Warm & Breezy Atmosphere"
+      data.currentTemp in 12.0..19.9 && data.windSpeed >= 18.0 -> "Cool & Brisk Winds"
+      data.currentTemp in 10.0..19.9 -> "Mild & Refreshing Air"
+      data.currentTemp in 1.0..9.9 -> "Chilly & Crisp Climate"
+      data.currentTemp <= 0.0 -> "Freezing Sub-Zero Frost"
+      else -> data.weatherDesc
+    }
   }
 
   // Floating Glassmorphic HUD Container
@@ -1023,8 +1124,8 @@ fun DynamicTemperatureHud(
           contentAlignment = Alignment.Center
         ) {
           val icon = when {
-            data.weatherCode in 0..1 -> if (data.isDay) Icons.Default.WbSunny else Icons.Default.NightlightRound
-            data.weatherCode in 2..3 -> Icons.Default.Cloud
+            data.weatherCode in 0..1 -> if (isEffectiveDay) Icons.Default.WbSunny else Icons.Default.NightlightRound
+            data.weatherCode in 2..3 -> if (isEffectiveDay) Icons.Default.Cloud else Icons.Default.NightsStay
             data.weatherCode in 45..48 -> Icons.Default.BlurOn
             data.weatherCode in 51..67 || data.weatherCode in 80..82 -> Icons.Default.WaterDrop
             data.weatherCode in 71..77 || data.weatherCode in 85..86 -> Icons.Default.AcUnit
@@ -1139,18 +1240,64 @@ fun DynamicTemperatureHud(
           .height(210.dp)
           .clip(RoundedCornerShape(20.dp))
           .background(
-            if (data.isDay) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.28f)
-            else MaterialTheme.colorScheme.surfaceContainer
+            if (isEffectiveDay) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.28f)
+            else Color(0xFF0F172A)
           )
           .testTag("weather_3d_embedded_view")
       ) {
         SmoothWeather3DView(
           weatherCode = data.weatherCode,
-          isDay = data.isDay,
+          isDay = isEffectiveDay,
           currentTemp = data.currentTemp,
           windSpeed = data.windSpeed,
           modifier = Modifier.fillMaxSize()
         )
+
+        // Day / Night Switcher Pill in Top Left of 3D frame
+        Surface(
+          shape = RoundedCornerShape(12.dp),
+          color = when (dayNightModeOverride) {
+            false -> Color(0xDD1E1B4B)
+            true -> Color(0xDDFFFBEB)
+            null -> MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
+          },
+          border = BorderStroke(
+            1.dp,
+            when (dayNightModeOverride) {
+              false -> Color(0xFF818CF8)
+              true -> Color(0xFFF59E0B)
+              null -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+            }
+          ),
+          modifier = Modifier
+            .align(Alignment.TopStart)
+            .padding(8.dp)
+            .clickable { onToggleDayNight() }
+            .testTag("weather_day_night_toggle")
+        ) {
+          Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
+            Icon(
+              imageVector = if (isEffectiveDay) Icons.Default.WbSunny else Icons.Default.NightlightRound,
+              contentDescription = "Toggle Day / Night preview",
+              tint = if (isEffectiveDay) Color(0xFFF59E0B) else Color(0xFF818CF8),
+              modifier = Modifier.size(12.dp)
+            )
+            Text(
+              text = when (dayNightModeOverride) {
+                false -> "🌙 Night (Forced)"
+                true -> "☀️ Day (Forced)"
+                null -> if (data.isDay) "☀️ Day (Live)" else "🌙 Night (Live)"
+              },
+              fontSize = 10.sp,
+              fontWeight = FontWeight.Bold,
+              color = if (isEffectiveDay) Color(0xFFB45309) else Color(0xFFA5B4FC)
+            )
+          }
+        }
 
         // Interactive Caption Pill in top corner of 3D frame
         Surface(

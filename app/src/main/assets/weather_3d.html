@@ -305,6 +305,26 @@
     snowSystem.visible = false;
     scene.add(snowSystem);
 
+    // F. Twinkling Night Starfield
+    const starCount = 200;
+    const starGeo = new THREE.BufferGeometry();
+    const starPositions = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount * 3; i += 3) {
+      starPositions[i] = (Math.random() - 0.5) * 14.0;
+      starPositions[i + 1] = Math.random() * 6.5 + 0.5;
+      starPositions[i + 2] = -2.5 - Math.random() * 5.0;
+    }
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+    const starMat = new THREE.PointsMaterial({
+      color: 0xe0e7ff,
+      size: 0.12,
+      transparent: true,
+      opacity: 0.85
+    });
+    const starSystem = new THREE.Points(starGeo, starMat);
+    starSystem.visible = false;
+    scene.add(starSystem);
+
     // --- 4. Fixed View Touch Tilt Parallax ---
     let targetTiltX = 0;
     let targetTiltY = 0;
@@ -434,16 +454,88 @@
         grassColor: 0xe2e8f0
       },
       night: {
-        hemiSky: 0x1e293b,
-        hemiGround: 0x0f172a,
+        hemiSky: 0x0f172a,
+        hemiGround: 0x020617,
         dirColor: 0x7dd3fc,
         dirIntensity: 0.8,
         sun: false,
         moon: true,
+        stars: true,
+        cloudsVisible: true,
         cloudDark: true,
         rain: false,
         snow: false,
         grassColor: 0x1e3a1f
+      },
+      night_clear: {
+        hemiSky: 0x0b1120,
+        hemiGround: 0x020617,
+        dirColor: 0x93c5fd,
+        dirIntensity: 0.9,
+        sun: false,
+        moon: true,
+        stars: true,
+        cloudsVisible: false,
+        cloudDark: false,
+        rain: false,
+        snow: false,
+        grassColor: 0x142a17
+      },
+      night_clouds: {
+        hemiSky: 0x1e293b,
+        hemiGround: 0x0f172a,
+        dirColor: 0x7dd3fc,
+        dirIntensity: 0.7,
+        sun: false,
+        moon: true,
+        stars: true,
+        cloudsVisible: true,
+        cloudDark: true,
+        rain: false,
+        snow: false,
+        grassColor: 0x162e1a
+      },
+      night_rain: {
+        hemiSky: 0x0f172a,
+        hemiGround: 0x020617,
+        dirColor: 0x60a5fa,
+        dirIntensity: 0.55,
+        sun: false,
+        moon: true,
+        stars: false,
+        cloudsVisible: true,
+        cloudDark: true,
+        rain: true,
+        snow: false,
+        grassColor: 0x0f2413
+      },
+      night_storm: {
+        hemiSky: 0x111827,
+        hemiGround: 0x030712,
+        dirColor: 0x818cf8,
+        dirIntensity: 0.35,
+        sun: false,
+        moon: false,
+        stars: false,
+        cloudsVisible: true,
+        cloudDark: true,
+        rain: true,
+        snow: false,
+        grassColor: 0x0a1a0d
+      },
+      night_snow: {
+        hemiSky: 0x1e1b4b,
+        hemiGround: 0x0f172a,
+        dirColor: 0xc7d2fe,
+        dirIntensity: 0.75,
+        sun: false,
+        moon: true,
+        stars: true,
+        cloudsVisible: true,
+        cloudDark: false,
+        rain: false,
+        snow: true,
+        grassColor: 0x334155
       }
     };
 
@@ -459,12 +551,16 @@
 
       sunGroup.visible = p.sun;
       moonGroup.visible = p.moon;
+      if (typeof starSystem !== 'undefined') {
+        starSystem.visible = p.stars || false;
+      }
 
       grassMat.color.setHex(p.grassColor);
 
       rainSystem.visible = p.rain;
       snowSystem.visible = p.snow;
 
+      cloudsGroup.visible = p.cloudsVisible !== false;
       const cloudHex = p.cloudDark ? 0x475569 : 0xffffff;
       cloudsGroup.children.forEach(cGroup => {
         cGroup.children.forEach(mesh => {
@@ -487,32 +583,54 @@
       }
 
       if (!isDay) {
-        applyPreset('night');
-        return;
-      }
-      if (weatherCode <= 1) {
-        applyPreset('clear');
-      } else if (weatherCode <= 3) {
-        applyPreset('clouds');
-      } else if (weatherCode >= 51 && weatherCode <= 67 || weatherCode >= 80 && weatherCode <= 82) {
-        applyPreset('rain');
-      } else if (weatherCode >= 71 && weatherCode <= 77 || weatherCode >= 85 && weatherCode <= 86) {
-        applyPreset('snow');
-      } else if (weatherCode >= 95) {
-        applyPreset('storm');
+        if (weatherCode <= 1) {
+          applyPreset('night_clear');
+        } else if (weatherCode <= 3) {
+          applyPreset('night_clouds');
+        } else if ((weatherCode >= 51 && weatherCode <= 67) || (weatherCode >= 80 && weatherCode <= 82)) {
+          applyPreset('night_rain');
+        } else if ((weatherCode >= 71 && weatherCode <= 77) || (weatherCode >= 85 && weatherCode <= 86)) {
+          applyPreset('night_snow');
+        } else if (weatherCode >= 95) {
+          applyPreset('night_storm');
+        } else {
+          applyPreset('night_clouds');
+        }
       } else {
-        applyPreset('clouds');
+        if (weatherCode <= 1) {
+          applyPreset('clear');
+        } else if (weatherCode <= 3) {
+          applyPreset('clouds');
+        } else if ((weatherCode >= 51 && weatherCode <= 67) || (weatherCode >= 80 && weatherCode <= 82)) {
+          applyPreset('rain');
+        } else if ((weatherCode >= 71 && weatherCode <= 77) || (weatherCode >= 85 && weatherCode <= 86)) {
+          applyPreset('snow');
+        } else if (weatherCode >= 95) {
+          applyPreset('storm');
+        } else {
+          applyPreset('clouds');
+        }
       }
 
       // Dynamic Temperature Atmosphere Adjustments
-      if (currentTemp >= 27) {
-        dirLight.color.setHex(0xfeb272);
-        dirLight.intensity = Math.min(1.8, 1.35 + (currentTemp - 27) * 0.03);
-        sunHaloMat.opacity = 0.42;
-      } else if (currentTemp <= 6) {
-        dirLight.color.setHex(0xbae6fd);
-        dirLight.intensity = 0.95;
-        grassMat.color.setHex(0x94a3b8);
+      if (isDay) {
+        if (currentTemp >= 27) {
+          dirLight.color.setHex(0xfeb272);
+          dirLight.intensity = Math.min(1.8, 1.35 + (currentTemp - 27) * 0.03);
+          sunHaloMat.opacity = 0.42;
+        } else if (currentTemp <= 6) {
+          dirLight.color.setHex(0xbae6fd);
+          dirLight.intensity = 0.95;
+          grassMat.color.setHex(0x94a3b8);
+        }
+      } else {
+        if (currentTemp <= 5) {
+          dirLight.color.setHex(0x93c5fd);
+          dirLight.intensity = 0.9;
+        } else if (currentTemp >= 25) {
+          dirLight.color.setHex(0xa5b4fc);
+          dirLight.intensity = 0.85;
+        }
       }
     };
 
@@ -556,6 +674,11 @@
       // Moon float
       if (moonGroup.visible) {
         moonGroup.position.y = 2.6 + Math.sin(time * 0.8) * 0.08;
+      }
+
+      // Starfield gentle twinkle
+      if (typeof starSystem !== 'undefined' && starSystem.visible) {
+        starMat.opacity = 0.55 + Math.sin(time * 2.2) * 0.35;
       }
 
       // Dynamic Volumetric Cloud Floating based on wind

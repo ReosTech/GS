@@ -48,22 +48,48 @@ object ReosAccountManager {
 
   /**
    * Appends ?user=username to the base URL if the user is authenticated in Reos Account.
-   * Example: https://reostech.pagekite.me/emails.html?user=TEST
+   * Seamlessly and reliably handles existing parameters, fragments, and duplicates.
+   * Example: https://reostech.pagekite.me/emails.html -> https://reostech.pagekite.me/emails.html?user=actual_username
    */
   fun formatAppUrl(context: Context, baseUrl: String): String {
     val username = getLoggedInUsername(context)
-    if (username.isNullOrBlank()) {
+    if (username.isNullOrBlank() || baseUrl.isBlank()) {
       return baseUrl
     }
-    val encodedUser = try {
-      URLEncoder.encode(username, "UTF-8")
-    } catch (_: Exception) {
-      username
+    val trimmed = baseUrl.trim()
+    if (!trimmed.startsWith("http://", ignoreCase = true) && !trimmed.startsWith("https://", ignoreCase = true)) {
+      return trimmed
     }
-    return if (baseUrl.contains("?")) {
-      "$baseUrl&user=$encodedUser"
-    } else {
-      "$baseUrl?user=$encodedUser"
+    return try {
+      val uri = android.net.Uri.parse(trimmed)
+      val existingUser = uri.getQueryParameter("user")
+      if (existingUser == username) {
+        return trimmed
+      }
+      val builder = uri.buildUpon()
+      builder.clearQuery()
+      for (paramName in uri.queryParameterNames) {
+        if (!paramName.equals("user", ignoreCase = true)) {
+          for (paramVal in uri.getQueryParameters(paramName)) {
+            builder.appendQueryParameter(paramName, paramVal)
+          }
+        }
+      }
+      builder.appendQueryParameter("user", username)
+      builder.build().toString()
+    } catch (_: Exception) {
+      val encodedUser = try {
+        URLEncoder.encode(username, "UTF-8")
+      } catch (_: Exception) {
+        username
+      }
+      if (trimmed.contains("user=")) {
+        trimmed.replace(Regex("([?&])user=[^&]*"), "$1user=$encodedUser")
+      } else if (trimmed.contains("?")) {
+        "$trimmed&user=$encodedUser"
+      } else {
+        "$trimmed?user=$encodedUser"
+      }
     }
   }
 

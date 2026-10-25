@@ -171,12 +171,15 @@ fun ReosAppsScreen(
   Box(
     modifier = modifier
       .fillMaxSize()
-      .background(MaterialTheme.colorScheme.background)
+      .background(MaterialTheme.colorScheme.background),
+    contentAlignment = Alignment.TopCenter
   ) {
     LazyVerticalGrid(
       columns = GridCells.Adaptive(minSize = 160.dp),
       modifier = Modifier
-        .fillMaxSize()
+        .fillMaxHeight()
+        .fillMaxWidth()
+        .widthIn(max = 760.dp)
         .padding(horizontal = 16.dp),
       contentPadding = PaddingValues(top = 16.dp, bottom = 110.dp),
       horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -210,15 +213,18 @@ fun ReosAppsScreen(
               )
             }
 
-            // Account status badge pill
+            // Reos Account Status Indicator Badge (Consistent across tablet, phone, laptop, TV)
             Surface(
               shape = RoundedCornerShape(14.dp),
               color = if (loggedInUser != null) Color(0x3322C55E) else MaterialTheme.colorScheme.primaryContainer,
               border = BorderStroke(1.dp, if (loggedInUser != null) Color(0xFF22C55E) else MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-              modifier = Modifier.clickable { onNavigateToAddons() }
+              modifier = Modifier
+                .height(36.dp)
+                .clickable { onNavigateToAddons() }
+                .testTag("reos_account_indicator_badge")
             ) {
               Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
               ) {
@@ -231,7 +237,7 @@ fun ReosAppsScreen(
                   text = if (loggedInUser != null) "👤 $loggedInUser" else "Reos Account",
                   fontSize = 11.sp,
                   fontWeight = FontWeight.Bold,
-                  color = if (loggedInUser != null) Color(0xFF4ADE80) else MaterialTheme.colorScheme.onPrimaryContainer
+                  color = if (loggedInUser != null) Color(0xFF16A34A) else MaterialTheme.colorScheme.onPrimaryContainer
                 )
               }
             }
