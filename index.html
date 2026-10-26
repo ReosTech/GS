@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Download Reos App (APK & AAB)</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: rgba(22, 30, 49, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --emerald: #10b981;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      background: radial-gradient(circle at top, #1e293b 0%, #0b0f19 100%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+    .container {
+      max-width: 640px;
+      width: 100%;
+      text-align: center;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: #93c5fd;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+    h1 {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    p.subtitle {
+      color: var(--text-muted);
+      font-size: 15px;
+      line-height: 1.6;
+      margin-bottom: 32px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    @media (max-width: 540px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 24px 20px;
+      backdrop-filter: blur(16px);
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(59, 130, 246, 0.4);
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+    }
+    .icon-apk { background: rgba(59, 130, 246, 0.2); }
+    .icon-aab { background: rgba(16, 185, 129, 0.2); }
+    .size-tag {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #e2e8f0;
+    }
+    .card h3 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .card p {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      padding: 12px 18px;
+      border-radius: 12px;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #ffffff;
+    }
+    .btn-primary:hover {
+      background: var(--primary-hover);
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+    }
+    .btn-emerald {
+      background: var(--emerald);
+      color: #ffffff;
+    }
+    .btn-emerald:hover {
+      background: #059669;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+    }
+    .info-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 16px;
+      padding: 18px;
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      text-align: left;
+    }
+    .info-box ul {
+      margin-left: 20px;
+      margin-top: 8px;
+    }
+    .info-box li {
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="badge">
+      <span>⚡</span> Built & Optimized with R8 Shrinking
+    </div>
+    <h1>Download Reos App</h1>
+    <p class="subtitle">
+      Install directly on your Android phone, tablet, or test on any device.
+    </p>
+
+    <div class="grid">
+      <!-- APK Card -->
+      <div class="card">
+        <div>
+          <div class="card-header">
+            <div class="icon icon-apk">📱</div>
+            <span class="size-tag">26 MB</span>
+          </div>
+          <h3>Android APK</h3>
+          <p>Standard package for direct installation on phones, tablets, DeX, and emulators.</p>
+        </div>
+        <a href="/reosapp.apk" class="btn btn-primary" download="reosapp.apk">
+          <span>⬇️</span> Download APK
+        </a>
+      </div>
+
+      <!-- AAB Card -->
+      <div class="card">
+        <div>
+          <div class="card-header">
+            <div class="icon icon-aab">📦</div>
+            <span class="size-tag">9.2 MB</span>
+          </div>
+          <h3>Android App Bundle</h3>
+          <p>Shrunk & obfuscated release bundle ready for Google Play upload or bundletool.</p>
+        </div>
+        <a href="/reosapp.aab" class="btn btn-emerald" download="reosapp.aab">
+          <span>⬇️</span> Download AAB
+        </a>
+      </div>
+    </div>
+
+    <div class="info-box">
+      <strong>✨ Release Highlights:</strong>
+      <ul>
+        <li><strong>R8 Minification:</strong> Reduced AAB size by 60% down to 9.2MB with dead-code removal.</li>
+        <li><strong>Zero-Lag Architecture:</strong> Instant tab switching without multi-screen overlay stutters.</li>
+        <li><strong>Optimized 3D Weather:</strong> Soft, natural illumination & 30fps GPU-throttled Three.js engine.</li>
+        <li><strong>Account Integration:</strong> Silent personalized <code>?user=username</code> parameter injection.</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

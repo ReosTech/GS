@@ -328,11 +328,7 @@ fun WeatherScreen(
         }
       }
     } else weatherData?.let { data ->
-      val scrollOffset = scrollState.value.toFloat()
-      // Disappear factor: as user scrolls down, hero 3D and temp window smoothly disappears
-      val fadeDistance = 380f
-      val heroAlpha = (1f - (scrollOffset / fadeDistance)).coerceIn(0f, 1f)
-      val heroScale = 0.94f + 0.06f * heroAlpha
+      val isScrolledPastHero by remember { derivedStateOf { scrollState.value > 380 } }
 
       Column(
         modifier = Modifier
@@ -348,11 +344,6 @@ fun WeatherScreen(
             .fillMaxWidth()
             .heightIn(min = viewportHeight)
             .padding(horizontal = 16.dp, vertical = 12.dp)
-            .graphicsLayer {
-              alpha = heroAlpha
-              scaleX = heroScale
-              scaleY = heroScale
-            }
             .testTag("fullscreen_3d_temp_window"),
           verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
@@ -516,7 +507,8 @@ fun WeatherScreen(
                 false -> true  // from Force Night -> Force Day
                 true -> null  // from Force Day -> back to Auto
               }
-            }
+            },
+            isScreenVisible = !isScrolledPastHero
           )
 
           // Bottom Section: Animated Scroll Down Indicator
@@ -527,34 +519,7 @@ fun WeatherScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(2.dp)
           ) {
-            val infiniteTransition = rememberInfiniteTransition(label = "bounce")
-            val bounceOffsetY by infiniteTransition.animateFloat(
-              initialValue = 0f,
-              targetValue = 6f,
-              animationSpec = infiniteRepeatable(
-                animation = tween(800, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-              ),
-              label = "bounce"
-            )
-            Row(
-              modifier = Modifier.graphicsLayer { translationY = bounceOffsetY },
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-              Text(
-                "Scroll down for detailed forecast & other info",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
-              )
-              Icon(
-                Icons.Default.KeyboardArrowDown,
-                contentDescription = "Scroll down",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(16.dp)
-              )
-            }
+            ScrollDownHintIndicator()
           }
         }
 
@@ -864,7 +829,7 @@ fun WeatherScreen(
 
       // --- 3. STICKY COMPACT TOP BAR (Appears when scrolled down so city/temp info is always visible) ---
       AnimatedVisibility(
-        visible = scrollState.value > 380,
+        visible = isScrolledPastHero,
         enter = fadeIn() + slideInVertically { -it },
         exit = fadeOut() + slideOutVertically { -it },
         modifier = Modifier.align(Alignment.TopCenter)
@@ -1011,19 +976,9 @@ fun DynamicTemperatureHud(
   modifier: Modifier = Modifier,
   isEffectiveDay: Boolean = data.isDay,
   dayNightModeOverride: Boolean? = null,
-  onToggleDayNight: () -> Unit = {}
+  onToggleDayNight: () -> Unit = {},
+  isScreenVisible: Boolean = true
 ) {
-  val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-  val pulseAlpha by infiniteTransition.animateFloat(
-    initialValue = 0.35f,
-    targetValue = 1.0f,
-    animationSpec = infiniteRepeatable(
-      animation = tween(1100, easing = LinearEasing),
-      repeatMode = RepeatMode.Reverse
-    ),
-    label = "pulseAlpha"
-  )
-
   // Dynamic Theme Accent based on Temperature & Day/Night
   val tempColor = when {
     !isEffectiveDay -> if (data.currentTemp >= 24.0) Color(0xFFC084FC) else Color(0xFF818CF8) // Mystical Moonlit Violet / Indigo
@@ -1210,12 +1165,7 @@ fun DynamicTemperatureHud(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
           ) {
-            Box(
-              modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(tempColor.copy(alpha = pulseAlpha))
-            )
+            PulsingStatusDot(color = tempColor)
             Text(
               text = dynamicAtmosphere,
               fontSize = 12.sp,
@@ -1250,6 +1200,7 @@ fun DynamicTemperatureHud(
           isDay = isEffectiveDay,
           currentTemp = data.currentTemp,
           windSpeed = data.windSpeed,
+          isScreenVisible = isScreenVisible,
           modifier = Modifier.fillMaxSize()
         )
 
@@ -1366,7 +1317,8 @@ fun SmoothWeather3DView(
   isDay: Boolean,
   modifier: Modifier = Modifier,
   currentTemp: Double = 20.0,
-  windSpeed: Double = 10.0
+  windSpeed: Double = 10.0,
+  isScreenVisible: Boolean = true
 ) {
   var webViewRef by remember { mutableStateOf<WebView?>(null) }
 
@@ -1380,6 +1332,17 @@ fun SmoothWeather3DView(
     } catch (_: Exception) {}
   }
 
+  // Seamlessly pause Three.js rendering when off-screen to save 100% GPU/CPU
+  LaunchedEffect(isScreenVisible, webViewRef) {
+    if (isScreenVisible) {
+      webViewRef?.onResume()
+      webViewRef?.evaluateJavascript("if (window.setRenderPaused) { window.setRenderPaused(false); }", null)
+    } else {
+      webViewRef?.evaluateJavascript("if (window.setRenderPaused) { window.setRenderPaused(true); }", null)
+      webViewRef?.onPause()
+    }
+  }
+
   Box(
     modifier = modifier
       .background(Color.Transparent)
@@ -1388,15 +1351,13 @@ fun SmoothWeather3DView(
     AndroidView(
       modifier = Modifier.fillMaxSize(),
       factory = { ctx ->
-        var touchStartX = 0f
-        var touchStartY = 0f
         WebView(ctx).apply {
           layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
           )
           setBackgroundColor(0x00000000)
-          setLayerType(View.LAYER_TYPE_HARDWARE, null)
+          setLayerType(View.LAYER_TYPE_NONE, null)
           if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
           }
@@ -1411,31 +1372,6 @@ fun SmoothWeather3DView(
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
               safeBrowsingEnabled = false
             }
-          }
-          // Interactive touch listener: horizontal tilts 3D, vertical scrolls the full-screen window away
-          setOnTouchListener { v, event ->
-            when (event.action) {
-              android.view.MotionEvent.ACTION_DOWN -> {
-                touchStartX = event.x
-                touchStartY = event.y
-              }
-              android.view.MotionEvent.ACTION_MOVE -> {
-                val dx = kotlin.math.abs(event.x - touchStartX)
-                val dy = kotlin.math.abs(event.y - touchStartY)
-                if (dx > dy && dx > 14f) {
-                  // Horizontal drag: tilt 3D scene
-                  v.parent?.requestDisallowInterceptTouchEvent(true)
-                } else if (dy > dx && dy > 14f) {
-                  // Vertical drag: allow scrolling down so full-screen 3D window disappears!
-                  v.parent?.requestDisallowInterceptTouchEvent(false)
-                }
-              }
-              android.view.MotionEvent.ACTION_UP,
-              android.view.MotionEvent.ACTION_CANCEL -> {
-                v.parent?.requestDisallowInterceptTouchEvent(false)
-              }
-            }
-            false
           }
           webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
@@ -1466,6 +1402,7 @@ fun SmoothWeather3DView(
       },
       update = { view ->
         webViewRef = view
+        view.visibility = if (isScreenVisible) View.VISIBLE else View.INVISIBLE
       },
       onRelease = { view ->
         try {
@@ -1475,6 +1412,37 @@ fun SmoothWeather3DView(
           view.destroy()
         } catch (_: Exception) {}
       }
+    )
+  }
+}
+
+@Composable
+fun PulsingStatusDot(color: Color, modifier: Modifier = Modifier) {
+  Box(
+    modifier = modifier
+      .size(8.dp)
+      .background(color, CircleShape)
+  )
+}
+
+@Composable
+fun ScrollDownHintIndicator(modifier: Modifier = Modifier) {
+  Row(
+    modifier = modifier,
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(4.dp)
+  ) {
+    Text(
+      "Scroll down for detailed forecast & other info",
+      fontSize = 11.sp,
+      fontWeight = FontWeight.Medium,
+      color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+    )
+    Icon(
+      Icons.Default.KeyboardArrowDown,
+      contentDescription = "Scroll down",
+      tint = MaterialTheme.colorScheme.primary,
+      modifier = Modifier.size(16.dp)
     )
   }
 }

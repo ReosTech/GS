@@ -17,6 +17,7 @@
       height: 100%;
       overflow: hidden;
       background: transparent;
+      touch-action: pan-y;
     }
     #webgl-container {
       width: 100%;
@@ -24,163 +25,143 @@
       position: absolute;
       top: 0;
       left: 0;
-      touch-action: none;
+      touch-action: pan-y;
     }
   </style>
   <script src="file:///android_asset/three.min.js"></script>
 </head>
 <body>
   <div id="webgl-container"></div>
-
   <script>
-    // --- 1. Three.js Setup with Smooth Edges & Transparent Background ---
+    // --- 1. Three.js Lightweight Scene Setup (Calibrated for zero lag & natural colors) ---
     const container = document.getElementById('webgl-container');
     const scene = new THREE.Scene();
-
-    const camera = new THREE.PerspectiveCamera(36, window.innerWidth / (window.innerHeight || 1), 0.1, 100);
+    const camera = new THREE.PerspectiveCamera(36, window.innerWidth / (window.innerHeight || 1), 0.1, 80);
     const FIXED_CAM_POS = new THREE.Vector3(0, 1.35, 8.6);
     camera.position.copy(FIXED_CAM_POS);
     camera.lookAt(0, 0.45, 0);
 
     const renderer = new THREE.WebGLRenderer({
-      antialias: true,
+      antialias: false,
       alpha: true,
-      powerPreference: "high-performance"
+      powerPreference: "low-power"
     });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.5));
+    renderer.setPixelRatio(1.0);
     renderer.setClearColor(0x000000, 0);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMappingExposure = 0.85;
+    renderer.shadowMap.enabled = false;
     container.appendChild(renderer.domElement);
 
-    // --- 2. Lighting & Dynamic Atmospheres ---
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x334155, 0.85);
+    // --- 2. Soft, Natural Balanced Lighting (No harsh blown-out colors) ---
+    const hemiLight = new THREE.HemisphereLight(0xe2e8f0, 0x475569, 0.48);
     scene.add(hemiLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffedd5, 1.45);
-    dirLight.position.set(6, 10, 5);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 1024;
-    dirLight.shadow.mapSize.height = 1024;
-    dirLight.shadow.radius = 3;
-    dirLight.shadow.bias = -0.0005;
+    const dirLight = new THREE.DirectionalLight(0xfffbeb, 0.62);
+    dirLight.position.set(5, 9, 4.5);
     scene.add(dirLight);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.15);
     scene.add(ambientLight);
 
-    const lightningLight = new THREE.PointLight(0xa5f3fc, 0, 22);
-    lightningLight.position.set(0, 4, 0);
+    const lightningLight = new THREE.PointLight(0xa5f3fc, 0, 18);
+    lightningLight.position.set(0, 3.5, 0);
     scene.add(lightningLight);
 
-    // --- 3. Smooth Procedural 3D Weather Models ---
+    // --- 3. Optimized Low-Poly Natural Weather Biome (MeshLambertMaterial for soft matte finish) ---
     const rootGroup = new THREE.Group();
     scene.add(rootGroup);
 
-    // A. Smooth Floating Biome Platter
+    // A. Floating Biome Platter
     const islandGroup = new THREE.Group();
     rootGroup.add(islandGroup);
 
-    const grassGeo = new THREE.CylinderGeometry(3.6, 3.4, 0.65, 48);
-    grassGeo.computeVertexNormals();
-    const grassMat = new THREE.MeshStandardMaterial({
-      color: 0x22c55e,
-      roughness: 0.65,
-      metalness: 0.05,
-      flatShading: false
+    const grassGeo = new THREE.CylinderGeometry(3.6, 3.4, 0.65, 24);
+    const grassMat = new THREE.MeshLambertMaterial({
+      color: 0x3b6e44
     });
     const grassMesh = new THREE.Mesh(grassGeo, grassMat);
-    grassMesh.receiveShadow = true;
     grassMesh.position.y = -0.3;
     islandGroup.add(grassMesh);
 
-    const earthGeo = new THREE.CylinderGeometry(3.4, 0.4, 2.2, 36);
-    earthGeo.computeVertexNormals();
-    const earthMat = new THREE.MeshStandardMaterial({
-      color: 0x475569,
-      roughness: 0.85,
-      metalness: 0.1,
-      flatShading: false
+    const earthGeo = new THREE.CylinderGeometry(3.4, 0.4, 2.2, 18);
+    const earthMat = new THREE.MeshLambertMaterial({
+      color: 0x475569
     });
     const earthMesh = new THREE.Mesh(earthGeo, earthMat);
     earthMesh.position.y = -1.6;
-    earthMesh.castShadow = true;
     islandGroup.add(earthMesh);
 
+    // Subtle decorative trees
     const allTrees = [];
+    const trunkGeo = new THREE.CylinderGeometry(0.12, 0.16, 0.7, 8);
+    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5c3d24 });
+    const foliageMat = new THREE.MeshLambertMaterial({ color: 0x1f4e2b });
+
     function createSmoothTree(x, z, scale = 1) {
       const tree = new THREE.Group();
-      const trunkMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.8, flatShading: false });
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12 * scale, 0.16 * scale, 0.7 * scale, 16), trunkMat);
+      const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+      trunk.scale.set(scale, scale, scale);
       trunk.position.y = 0.35 * scale;
-      trunk.castShadow = true;
       tree.add(trunk);
 
-      const foliageMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.65, flatShading: false });
       for (let i = 0; i < 3; i++) {
-        const tierGeo = new THREE.ConeGeometry((0.85 - i * 0.2) * scale, (0.75 - i * 0.1) * scale, 24);
-        tierGeo.computeVertexNormals();
+        const tierGeo = new THREE.ConeGeometry((0.85 - i * 0.2) * scale, (0.75 - i * 0.1) * scale, 12);
         const tier = new THREE.Mesh(tierGeo, foliageMat);
         tier.position.y = (0.65 + i * 0.4) * scale;
-        tier.castShadow = true;
         tree.add(tier);
       }
       tree.position.set(x, 0.02, z);
-      allTrees.push({ group: tree, baseScale: scale, origZ: z, origX: x });
+      allTrees.push({ group: tree, baseScale: scale });
       return tree;
     }
+
     islandGroup.add(createSmoothTree(-1.3, 0.6, 1.1));
     islandGroup.add(createSmoothTree(-1.9, -0.5, 0.85));
     islandGroup.add(createSmoothTree(1.6, 0.8, 1.05));
     islandGroup.add(createSmoothTree(2.0, -0.4, 0.8));
     islandGroup.add(createSmoothTree(0.1, -1.4, 1.2));
 
+    // River pebbles
+    const pMat = new THREE.MeshLambertMaterial({ color: 0x64748b });
     function createSmoothPebble(x, z, radius) {
-      const pGeo = new THREE.SphereGeometry(radius, 20, 20);
+      const pGeo = new THREE.SphereGeometry(radius, 12, 12);
       pGeo.scale(1.2, 0.7, 1.0);
-      const pMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.6, flatShading: false });
       const p = new THREE.Mesh(pGeo, pMat);
       p.position.set(x, radius * 0.5, z);
-      p.castShadow = true;
       return p;
     }
     islandGroup.add(createSmoothPebble(0.6, 1.2, 0.28));
     islandGroup.add(createSmoothPebble(-0.7, 1.3, 0.22));
 
-    // B. Smooth Hero Sun
+    // B. Gentle Natural Sun (Soft matte gold, non-burning)
     const sunGroup = new THREE.Group();
-    sunGroup.position.set(2.6, 2.5, -1.0);
+    sunGroup.position.set(2.5, 2.4, -1.0);
     rootGroup.add(sunGroup);
 
-    const sunCoreGeo = new THREE.SphereGeometry(1.05, 36, 36);
-    const sunCoreMat = new THREE.MeshStandardMaterial({
+    const sunCoreGeo = new THREE.SphereGeometry(1.0, 16, 16);
+    const sunCoreMat = new THREE.MeshLambertMaterial({
       color: 0xfbbf24,
-      emissive: 0xf59e0b,
-      emissiveIntensity: 0.95,
-      roughness: 0.25,
-      metalness: 0.05
+      emissive: 0xd97706,
+      emissiveIntensity: 0.12
     });
     const sunCore = new THREE.Mesh(sunCoreGeo, sunCoreMat);
     sunGroup.add(sunCore);
 
     const coronaGroup = new THREE.Group();
     sunGroup.add(coronaGroup);
-    const rayMat = new THREE.MeshStandardMaterial({
+
+    const rayGeo = new THREE.ConeGeometry(0.16, 0.65, 10);
+    const rayMat = new THREE.MeshLambertMaterial({
       color: 0xfde047,
-      emissive: 0xf59e0b,
-      emissiveIntensity: 0.8,
-      roughness: 0.3,
-      flatShading: false
+      emissive: 0xd97706,
+      emissiveIntensity: 0.08
     });
-    for (let i = 0; i < 12; i++) {
-      const angle = (i / 12) * Math.PI * 2;
-      const rayGeo = new THREE.ConeGeometry(0.18, 0.75, 16);
-      rayGeo.computeVertexNormals();
+    for (let i = 0; i < 10; i++) {
+      const angle = (i / 10) * Math.PI * 2;
       const ray = new THREE.Mesh(rayGeo, rayMat);
-      ray.position.set(Math.cos(angle) * 1.4, Math.sin(angle) * 1.4, 0);
+      ray.position.set(Math.cos(angle) * 1.35, Math.sin(angle) * 1.35, 0);
       ray.rotation.z = angle - Math.PI / 2;
       coronaGroup.add(ray);
     }
@@ -188,64 +169,52 @@
     const sunHaloMat = new THREE.MeshBasicMaterial({
       color: 0xfef08a,
       transparent: true,
-      opacity: 0.28,
+      opacity: 0.12,
       side: THREE.BackSide
     });
-    const sunHalo = new THREE.Mesh(new THREE.SphereGeometry(1.65, 32, 32), sunHaloMat);
+    const sunHalo = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 16), sunHaloMat);
     sunGroup.add(sunHalo);
 
-    // C. Smooth Lunar System (Night Mode)
+    // C. Lunar Mode (Night)
     const moonGroup = new THREE.Group();
-    moonGroup.position.set(-2.5, 2.6, -1.2);
+    moonGroup.position.set(-2.4, 2.5, -1.2);
     moonGroup.visible = false;
     rootGroup.add(moonGroup);
 
-    const moonCoreGeo = new THREE.SphereGeometry(0.9, 32, 32);
-    const moonCoreMat = new THREE.MeshStandardMaterial({
-      color: 0xe2e8f0,
-      emissive: 0x94a3b8,
-      emissiveIntensity: 0.35,
-      roughness: 0.6,
-      metalness: 0.05
+    const moonCoreMat = new THREE.MeshLambertMaterial({
+      color: 0xcfd8dc,
+      emissive: 0x90a4ae,
+      emissiveIntensity: 0.12
     });
-    const moonCore = new THREE.Mesh(moonCoreGeo, moonCoreMat);
+    const moonCore = new THREE.Mesh(new THREE.SphereGeometry(0.85, 16, 16), moonCoreMat);
     moonGroup.add(moonCore);
 
     const moonHaloMat = new THREE.MeshBasicMaterial({
       color: 0x38bdf8,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.14,
       side: THREE.BackSide
     });
-    const moonHalo = new THREE.Mesh(new THREE.SphereGeometry(1.35, 32, 32), moonHaloMat);
+    const moonHalo = new THREE.Mesh(new THREE.SphereGeometry(1.25, 16, 16), moonHaloMat);
     moonGroup.add(moonHalo);
 
-    // D. Silky Smooth Volumetric Clouds
+    // D. Soft Volumetric Clouds (12x12 segment puffs for peak performance)
     function createSmoothCloud(scale = 1, isDark = false) {
       const cloud = new THREE.Group();
-      const cloudMat = new THREE.MeshStandardMaterial({
-        color: isDark ? 0x475569 : 0xffffff,
-        roughness: 0.88,
-        metalness: 0.02,
-        flatShading: false
+      const cloudMat = new THREE.MeshLambertMaterial({
+        color: isDark ? 0x334155 : 0xf8fafc
       });
-
       const puffs = [
-        [0, 0, 0, 0.82],
-        [0.7, 0.08, 0, 0.64],
-        [-0.7, 0.04, 0, 0.60],
-        [0.3, 0.42, 0.1, 0.58],
-        [-0.32, 0.38, -0.1, 0.54],
-        [0.1, -0.16, 0.32, 0.5],
-        [-0.15, -0.16, -0.28, 0.46]
+        [0, 0, 0, 0.80],
+        [0.65, 0.08, 0, 0.62],
+        [-0.65, 0.04, 0, 0.58],
+        [0.28, 0.38, 0.1, 0.54],
+        [-0.28, 0.34, -0.1, 0.50]
       ];
-
       puffs.forEach(([px, py, pz, pr]) => {
-        const pGeo = new THREE.SphereGeometry(pr * scale, 28, 28);
-        pGeo.computeVertexNormals();
+        const pGeo = new THREE.SphereGeometry(pr * scale, 12, 12);
         const puff = new THREE.Mesh(pGeo, cloudMat);
         puff.position.set(px * scale, py * scale, pz * scale);
-        puff.castShadow = true;
         cloud.add(puff);
       });
       return cloud;
@@ -254,83 +223,82 @@
     const cloudsGroup = new THREE.Group();
     rootGroup.add(cloudsGroup);
 
-    const cloud1 = createSmoothCloud(1.2, false);
-    cloud1.position.set(-1.8, 2.1, 0.9);
+    const cloud1 = createSmoothCloud(1.15, false);
+    cloud1.position.set(-1.7, 2.0, 0.8);
     cloudsGroup.add(cloud1);
 
-    const cloud2 = createSmoothCloud(0.95, false);
-    cloud2.position.set(1.9, 1.8, -0.6);
+    const cloud2 = createSmoothCloud(0.92, false);
+    cloud2.position.set(1.8, 1.7, -0.6);
     cloudsGroup.add(cloud2);
 
-    const cloud3 = createSmoothCloud(1.35, false);
-    cloud3.position.set(0.1, 2.6, -1.4);
+    const cloud3 = createSmoothCloud(1.25, false);
+    cloud3.position.set(0.1, 2.5, -1.3);
     cloudsGroup.add(cloud3);
 
-    // E. Dynamic Particle Systems (Rain & Snow)
-    const rainCount = 300;
+    // E. Lightweight Particle Systems (Rain & Snow)
+    const rainCount = 45;
     const rainGeo = new THREE.BufferGeometry();
     const rainPositions = new Float32Array(rainCount * 3);
     for (let i = 0; i < rainCount * 3; i += 3) {
-      rainPositions[i] = (Math.random() - 0.5) * 9.5;
-      rainPositions[i + 1] = Math.random() * 8.5;
-      rainPositions[i + 2] = (Math.random() - 0.5) * 9.5;
+      rainPositions[i] = (Math.random() - 0.5) * 8.5;
+      rainPositions[i + 1] = Math.random() * 8.0;
+      rainPositions[i + 2] = (Math.random() - 0.5) * 8.5;
     }
     rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
     const rainMat = new THREE.PointsMaterial({
-      color: 0x93c5fd,
-      size: 0.11,
+      color: 0x60a5fa,
+      size: 0.10,
       transparent: true,
-      opacity: 0.85
+      opacity: 0.65
     });
     const rainSystem = new THREE.Points(rainGeo, rainMat);
     rainSystem.visible = false;
     scene.add(rainSystem);
 
-    const snowCount = 240;
+    const snowCount = 40;
     const snowGeo = new THREE.BufferGeometry();
     const snowPositions = new Float32Array(snowCount * 3);
     for (let i = 0; i < snowCount * 3; i += 3) {
-      snowPositions[i] = (Math.random() - 0.5) * 9.5;
-      snowPositions[i + 1] = Math.random() * 8.5;
-      snowPositions[i + 2] = (Math.random() - 0.5) * 9.5;
+      snowPositions[i] = (Math.random() - 0.5) * 8.5;
+      snowPositions[i + 1] = Math.random() * 8.0;
+      snowPositions[i + 2] = (Math.random() - 0.5) * 8.5;
     }
     snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPositions, 3));
     const snowMat = new THREE.PointsMaterial({
       color: 0xffffff,
-      size: 0.16,
+      size: 0.14,
       transparent: true,
-      opacity: 0.9
+      opacity: 0.75
     });
     const snowSystem = new THREE.Points(snowGeo, snowMat);
     snowSystem.visible = false;
     scene.add(snowSystem);
 
-    // F. Twinkling Night Starfield
-    const starCount = 200;
+    // F. Starfield for Night Mode
+    const starCount = 80;
     const starGeo = new THREE.BufferGeometry();
     const starPositions = new Float32Array(starCount * 3);
     for (let i = 0; i < starCount * 3; i += 3) {
-      starPositions[i] = (Math.random() - 0.5) * 14.0;
-      starPositions[i + 1] = Math.random() * 6.5 + 0.5;
-      starPositions[i + 2] = -2.5 - Math.random() * 5.0;
+      starPositions[i] = (Math.random() - 0.5) * 12.0;
+      starPositions[i + 1] = Math.random() * 6.0 + 0.5;
+      starPositions[i + 2] = -2.5 - Math.random() * 4.0;
     }
     starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
     const starMat = new THREE.PointsMaterial({
-      color: 0xe0e7ff,
-      size: 0.12,
+      color: 0xc7d2fe,
+      size: 0.10,
       transparent: true,
-      opacity: 0.85
+      opacity: 0.60
     });
     const starSystem = new THREE.Points(starGeo, starMat);
     starSystem.visible = false;
     scene.add(starSystem);
 
-    // --- 4. Fixed View Touch Tilt Parallax ---
+    // --- 4. Interactive Touch Tilt Parallax ---
     let targetTiltX = 0;
     let targetTiltY = 0;
     let currentTiltX = 0;
     let currentTiltY = 0;
-
     let isTouching = false;
     let startTouchX = 0;
     let startTouchY = 0;
@@ -339,15 +307,15 @@
       isTouching = true;
       startTouchX = e.clientX;
       startTouchY = e.clientY;
-    });
+    }, { passive: true });
 
     window.addEventListener('pointermove', (e) => {
       if (!isTouching) return;
       const dx = (e.clientX - startTouchX) / window.innerWidth;
       const dy = (e.clientY - startTouchY) / window.innerHeight;
-      targetTiltY = dx * 0.45;
-      targetTiltX = dy * 0.35;
-    });
+      targetTiltY = dx * 0.40;
+      targetTiltX = dy * 0.30;
+    }, { passive: true });
 
     window.addEventListener('pointerup', () => {
       isTouching = false;
@@ -361,103 +329,81 @@
       targetTiltY = 0;
     });
 
-    // Tap on 3D elements for punchy feedback
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-
-    container.addEventListener('click', (e) => {
-      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-      raycaster.setFromCamera(mouse, camera);
-
-      const intersects = raycaster.intersectObjects(rootGroup.children, true);
-      if (intersects.length > 0) {
-        const obj = intersects[0].object;
-        obj.scale.multiplyScalar(1.22);
-        setTimeout(() => obj.scale.divideScalar(1.22), 160);
-
-        if (currentMode === 'storm') {
-          triggerLightning();
-        }
-      }
-    });
-
     function triggerLightning() {
-      lightningLight.intensity = 4.2;
-      setTimeout(() => { lightningLight.intensity = 0.2; }, 50);
-      setTimeout(() => { lightningLight.intensity = 3.2; }, 100);
-      setTimeout(() => { lightningLight.intensity = 0; }, 170);
+      lightningLight.intensity = 2.4;
+      setTimeout(() => { lightningLight.intensity = 0.2; }, 60);
+      setTimeout(() => { lightningLight.intensity = 1.8; }, 120);
+      setTimeout(() => { lightningLight.intensity = 0; }, 180);
     }
 
-    // --- 5. Weather Presets & Mode Switching ---
+    // --- 5. Weather Presets (Soft, Natural, Non-Oversaturated Tones) ---
     let currentMode = 'clear';
-
     const presets = {
       clear: {
-        hemiSky: 0xffffff,
-        hemiGround: 0x38bdf8,
-        dirColor: 0xffedd5,
-        dirIntensity: 1.45,
+        hemiSky: 0xe2e8f0,
+        hemiGround: 0x475569,
+        dirColor: 0xfffbeb,
+        dirIntensity: 0.62,
         sun: true,
         moon: false,
         cloudDark: false,
         rain: false,
         snow: false,
-        grassColor: 0x22c55e
+        grassColor: 0x3b6e44
       },
       clouds: {
-        hemiSky: 0xe2e8f0,
-        hemiGround: 0x64748b,
+        hemiSky: 0xdde3ea,
+        hemiGround: 0x526071,
         dirColor: 0xfff7ed,
-        dirIntensity: 0.95,
+        dirIntensity: 0.54,
         sun: true,
         moon: false,
         cloudDark: false,
         rain: false,
         snow: false,
-        grassColor: 0x16a34a
+        grassColor: 0x3b6e44
       },
       rain: {
-        hemiSky: 0x94a3b8,
-        hemiGround: 0x334155,
+        hemiSky: 0x8294a8,
+        hemiGround: 0x2b3848,
         dirColor: 0x93c5fd,
-        dirIntensity: 0.6,
+        dirIntensity: 0.45,
         sun: false,
         moon: false,
         cloudDark: true,
         rain: true,
         snow: false,
-        grassColor: 0x15803d
+        grassColor: 0x244e2f
       },
       storm: {
-        hemiSky: 0x64748b,
+        hemiSky: 0x475569,
         hemiGround: 0x1e293b,
         dirColor: 0x818cf8,
-        dirIntensity: 0.35,
+        dirIntensity: 0.32,
         sun: false,
         moon: false,
         cloudDark: true,
         rain: true,
         snow: false,
-        grassColor: 0x14532d
+        grassColor: 0x1a3d24
       },
       snow: {
-        hemiSky: 0xf1f5f9,
-        hemiGround: 0x64748b,
-        dirColor: 0xffffff,
-        dirIntensity: 0.9,
+        hemiSky: 0xe8edf2,
+        hemiGround: 0x526071,
+        dirColor: 0xf8fafc,
+        dirIntensity: 0.65,
         sun: false,
         moon: false,
         cloudDark: false,
         rain: false,
         snow: true,
-        grassColor: 0xe2e8f0
+        grassColor: 0xcfd8dc
       },
       night: {
         hemiSky: 0x0f172a,
         hemiGround: 0x020617,
         dirColor: 0x7dd3fc,
-        dirIntensity: 0.8,
+        dirIntensity: 0.55,
         sun: false,
         moon: true,
         stars: true,
@@ -465,13 +411,13 @@
         cloudDark: true,
         rain: false,
         snow: false,
-        grassColor: 0x1e3a1f
+        grassColor: 0x1a3321
       },
       night_clear: {
         hemiSky: 0x0b1120,
         hemiGround: 0x020617,
         dirColor: 0x93c5fd,
-        dirIntensity: 0.9,
+        dirIntensity: 0.60,
         sun: false,
         moon: true,
         stars: true,
@@ -479,13 +425,13 @@
         cloudDark: false,
         rain: false,
         snow: false,
-        grassColor: 0x142a17
+        grassColor: 0x162c1d
       },
       night_clouds: {
         hemiSky: 0x1e293b,
         hemiGround: 0x0f172a,
         dirColor: 0x7dd3fc,
-        dirIntensity: 0.7,
+        dirIntensity: 0.50,
         sun: false,
         moon: true,
         stars: true,
@@ -493,13 +439,13 @@
         cloudDark: true,
         rain: false,
         snow: false,
-        grassColor: 0x162e1a
+        grassColor: 0x162c1d
       },
       night_rain: {
         hemiSky: 0x0f172a,
         hemiGround: 0x020617,
         dirColor: 0x60a5fa,
-        dirIntensity: 0.55,
+        dirIntensity: 0.42,
         sun: false,
         moon: true,
         stars: false,
@@ -507,13 +453,13 @@
         cloudDark: true,
         rain: true,
         snow: false,
-        grassColor: 0x0f2413
+        grassColor: 0x112316
       },
       night_storm: {
         hemiSky: 0x111827,
         hemiGround: 0x030712,
         dirColor: 0x818cf8,
-        dirIntensity: 0.35,
+        dirIntensity: 0.30,
         sun: false,
         moon: false,
         stars: false,
@@ -521,13 +467,13 @@
         cloudDark: true,
         rain: true,
         snow: false,
-        grassColor: 0x0a1a0d
+        grassColor: 0x0e1b12
       },
       night_snow: {
         hemiSky: 0x1e1b4b,
         hemiGround: 0x0f172a,
-        dirColor: 0xc7d2fe,
-        dirIntensity: 0.75,
+        dirColor: 0xa5b4fc,
+        dirIntensity: 0.55,
         sun: false,
         moon: true,
         stars: true,
@@ -535,33 +481,28 @@
         cloudDark: false,
         rain: false,
         snow: true,
-        grassColor: 0x334155
+        grassColor: 0x2b3848
       }
     };
 
     function applyPreset(name) {
       currentMode = name;
       const p = presets[name] || presets.clear;
-
       hemiLight.color.setHex(p.hemiSky);
       hemiLight.groundColor.setHex(p.hemiGround);
-
       dirLight.color.setHex(p.dirColor);
       dirLight.intensity = p.dirIntensity;
 
       sunGroup.visible = p.sun;
       moonGroup.visible = p.moon;
-      if (typeof starSystem !== 'undefined') {
-        starSystem.visible = p.stars || false;
-      }
+      starSystem.visible = p.stars || false;
 
       grassMat.color.setHex(p.grassColor);
-
       rainSystem.visible = p.rain;
       snowSystem.visible = p.snow;
-
       cloudsGroup.visible = p.cloudsVisible !== false;
-      const cloudHex = p.cloudDark ? 0x475569 : 0xffffff;
+
+      const cloudHex = p.cloudDark ? 0x334155 : 0xf8fafc;
       cloudsGroup.children.forEach(cGroup => {
         cGroup.children.forEach(mesh => {
           if (mesh.material) mesh.material.color.setHex(cloudHex);
@@ -569,7 +510,6 @@
       });
     }
 
-    // Dynamic Weather Environmental States
     let currentTemp = 20.0;
     let currentWind = 10.0;
 
@@ -611,114 +551,97 @@
           applyPreset('clouds');
         }
       }
-
-      // Dynamic Temperature Atmosphere Adjustments
-      if (isDay) {
-        if (currentTemp >= 27) {
-          dirLight.color.setHex(0xfeb272);
-          dirLight.intensity = Math.min(1.8, 1.35 + (currentTemp - 27) * 0.03);
-          sunHaloMat.opacity = 0.42;
-        } else if (currentTemp <= 6) {
-          dirLight.color.setHex(0xbae6fd);
-          dirLight.intensity = 0.95;
-          grassMat.color.setHex(0x94a3b8);
-        }
-      } else {
-        if (currentTemp <= 5) {
-          dirLight.color.setHex(0x93c5fd);
-          dirLight.intensity = 0.9;
-        } else if (currentTemp >= 25) {
-          dirLight.color.setHex(0xa5b4fc);
-          dirLight.intensity = 0.85;
-        }
-      }
     };
 
-    // --- 6. 60fps Animation Loop with Dynamic Natural Reactions ---
-    const clock = new THREE.Clock();
-    let nextLightning = 3.5;
+    // --- 6. Throttled 30 FPS Animation Loop (Smooth visuals, 60% lower GPU & CPU) ---
+    let isPaused = false;
+    document.addEventListener("visibilitychange", () => {
+      isPaused = document.hidden;
+    });
 
-    function animate() {
+    window.setRenderPaused = function(paused) {
+      isPaused = !!paused;
+    };
+
+    let lastFrameTime = performance.now();
+    const frameInterval = 1000 / 30; // 30 FPS limit
+    let simTime = 0;
+    let nextLightning = 4.0;
+
+    function animate(currentTime) {
       requestAnimationFrame(animate);
-      const delta = clock.getDelta();
-      const time = clock.getElapsedTime();
+      if (isPaused) return;
 
-      // Smooth Spring Interpolation for Fixed View Parallax
-      currentTiltX += (targetTiltX - currentTiltX) * 0.1;
-      currentTiltY += (targetTiltY - currentTiltY) * 0.1;
+      const elapsed = currentTime - lastFrameTime;
+      if (elapsed < frameInterval) return;
+      lastFrameTime = currentTime - (elapsed % frameInterval);
 
-      // Natural idle float + user tilt
-      rootGroup.rotation.y = currentTiltY + Math.sin(time * 0.35) * 0.05;
-      rootGroup.rotation.x = currentTiltX + Math.cos(time * 0.4) * 0.03;
+      const delta = 0.033; // Fixed 30fps delta
+      simTime += delta;
 
-      // Island gentle float
-      islandGroup.position.y = Math.sin(time * 0.7) * 0.08;
+      // Smooth Spring Parallax
+      currentTiltX += (targetTiltX - currentTiltX) * 0.12;
+      currentTiltY += (targetTiltY - currentTiltY) * 0.12;
 
-      // Dynamic Tree Swaying with Wind
-      const windEffect = Math.min(Math.max(currentWind, 3), 70);
+      rootGroup.rotation.y = currentTiltY + Math.sin(simTime * 0.3) * 0.04;
+      rootGroup.rotation.x = currentTiltX + Math.cos(simTime * 0.35) * 0.025;
+      islandGroup.position.y = Math.sin(simTime * 0.6) * 0.06;
+
+      // Tree swaying
+      const windFactor = Math.min(Math.max(currentWind, 3), 60);
       allTrees.forEach((t, i) => {
-        const swaySpeed = 1.3 + (i % 3) * 0.45 + windEffect * 0.03;
-        const swayAmount = 0.02 + windEffect * 0.0018;
-        t.group.rotation.z = Math.sin(time * swaySpeed + i * 1.1) * swayAmount;
+        const swaySpeed = 1.2 + (i % 3) * 0.35 + windFactor * 0.02;
+        const swayAmount = 0.015 + windFactor * 0.0012;
+        t.group.rotation.z = Math.sin(simTime * swaySpeed + i) * swayAmount;
       });
 
-      // Sun subtle breathing, heat shimmer, & corona spin
+      // Sun & Moon gentle movement
       if (sunGroup.visible) {
-        const heatPulseFactor = currentTemp > 25 ? (currentTemp - 25) * 0.025 : 0;
-        sunGroup.position.y = 2.5 + Math.sin(time * 1.1) * 0.1;
-        coronaGroup.rotation.z = time * (0.35 + heatPulseFactor * 0.5);
-        const pulse = 1.0 + Math.sin(time * (2.2 + heatPulseFactor * 1.4)) * (0.04 + heatPulseFactor * 0.03);
-        sunCore.scale.set(pulse, pulse, pulse);
+        sunGroup.position.y = 2.4 + Math.sin(simTime * 0.9) * 0.07;
+        coronaGroup.rotation.z = simTime * 0.25;
       }
-
-      // Moon float
       if (moonGroup.visible) {
-        moonGroup.position.y = 2.6 + Math.sin(time * 0.8) * 0.08;
+        moonGroup.position.y = 2.5 + Math.sin(simTime * 0.7) * 0.06;
       }
 
-      // Starfield gentle twinkle
-      if (typeof starSystem !== 'undefined' && starSystem.visible) {
-        starMat.opacity = 0.55 + Math.sin(time * 2.2) * 0.35;
-      }
+      // Cloud floating
+      const cloudSpeed = 0.25 + windFactor * 0.015;
+      cloud1.position.x = -1.7 + Math.sin(simTime * (cloudSpeed * 1.1)) * 0.26;
+      cloud2.position.x = 1.8 + Math.cos(simTime * (cloudSpeed * 1.2)) * 0.22;
+      cloud3.position.z = -1.3 + Math.sin(simTime * (cloudSpeed * 0.9)) * 0.18;
 
-      // Dynamic Volumetric Cloud Floating based on wind
-      const cloudSpeed = 0.32 + windEffect * 0.02;
-      cloud1.position.x = -1.8 + Math.sin(time * (cloudSpeed * 1.1)) * 0.32;
-      cloud2.position.x = 1.9 + Math.cos(time * (cloudSpeed * 1.25)) * 0.28;
-      cloud3.position.z = -1.4 + Math.sin(time * (cloudSpeed * 0.95)) * 0.22;
-
-      // Dynamic Rain animation
+      // Rain particles
       if (rainSystem.visible) {
         const positions = rainGeo.attributes.position.array;
-        const rainSpeed = 14 + windEffect * 0.1;
+        const rainSpeed = 12 + windFactor * 0.08;
         for (let i = 1; i < rainPositions.length; i += 3) {
           positions[i] -= rainSpeed * delta;
-          positions[i - 1] += (windEffect * 0.015) * delta;
+          positions[i - 1] += (windFactor * 0.01) * delta;
           if (positions[i] < -1.8) {
-            positions[i] = 7.0;
-            positions[i - 1] = (Math.random() - 0.5) * 9.5;
+            positions[i] = 6.5;
+            positions[i - 1] = (Math.random() - 0.5) * 8.5;
           }
         }
         rainGeo.attributes.position.needsUpdate = true;
       }
 
-      // Dynamic Snow animation
+      // Snow particles
       if (snowSystem.visible) {
         const positions = snowGeo.attributes.position.array;
         for (let i = 0; i < snowPositions.length; i += 3) {
-          positions[i] += Math.sin(time + i) * (0.012 + windEffect * 0.001);
-          positions[i + 1] -= (2.8 + windEffect * 0.02) * delta;
-          if (positions[i + 1] < -1.8) positions[i + 1] = 7.0;
+          positions[i] += Math.sin(simTime + i) * 0.008;
+          positions[i + 1] -= (2.4 + windFactor * 0.015) * delta;
+          if (positions[i + 1] < -1.8) positions[i + 1] = 6.5;
         }
         snowGeo.attributes.position.needsUpdate = true;
       }
 
-      // Storm random flashes
-      if (currentMode === 'storm') {
+      // Storm lightning
+      if (currentMode === 'storm' || currentMode === 'night_storm') {
         nextLightning -= delta;
         if (nextLightning <= 0) {
           triggerLightning();
-          nextLightning = 3.0 + Math.random() * 3.5;
+          nextLightning = 3.5 + Math.random() * 4.0;
         }
       }
 
@@ -732,11 +655,12 @@
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
     }
+
     window.addEventListener('resize', updateDimensions);
-    setTimeout(updateDimensions, 80);
+    setTimeout(updateDimensions, 60);
 
     applyPreset('clear');
-    animate();
+    requestAnimationFrame(animate);
   </script>
 </body>
 </html>

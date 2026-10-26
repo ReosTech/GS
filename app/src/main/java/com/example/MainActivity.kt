@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -100,77 +101,60 @@ fun MainAppContainer(
         .fillMaxSize()
         .windowInsetsPadding(WindowInsets.statusBars)
     ) {
-      // 1. Primary Reos Screen (retained across tabs to preserve WebView session & prevent renderer crash)
-      Box(
-        modifier = Modifier
-          .fillMaxSize()
-          .then(
-            if (currentTab == MainAppTab.REOS) Modifier else Modifier.size(0.dp)
+      when (currentTab) {
+        MainAppTab.REOS -> {
+          ReosScreen(
+            initialUrl = com.example.reos.REOS_TAB_URL,
+            loadUrlRequest = reosBrowserUrlRequest,
+            urlRequestTimestamp = reosBrowserUrlTimestamp,
+            onNavigateToWeather = {
+              currentTab = MainAppTab.REOS_APPS
+              activeSubApp = "weather"
+            },
+            onNavigateToAddons = {
+              currentTab = MainAppTab.ADDONS
+              activeSubApp = null
+            },
+            isActiveTab = true
           )
-      ) {
-        ReosScreen(
-          initialUrl = com.example.reos.REOS_TAB_URL,
-          loadUrlRequest = reosBrowserUrlRequest,
-          urlRequestTimestamp = reosBrowserUrlTimestamp,
-          onNavigateToWeather = {
-            currentTab = MainAppTab.REOS_APPS
-            activeSubApp = "weather"
-          },
-          onNavigateToAddons = {
-            currentTab = MainAppTab.ADDONS
-            activeSubApp = null
-          },
-          isActiveTab = currentTab == MainAppTab.REOS
-        )
-      }
-
-      // 2. Reos Apps Tab (hosts ReosAppsScreen in tile form; clicking Weather tile opens WeatherScreen)
-      AnimatedVisibility(
-        visible = currentTab == MainAppTab.REOS_APPS,
-        enter = fadeIn(),
-        exit = fadeOut()
-      ) {
-        if (activeSubApp == "weather") {
-          WeatherScreen(
-            onBack = { activeSubApp = null }
-          )
-        } else {
-          ReosAppsScreen(
-            onNavigateToWeather = { activeSubApp = "weather" },
-            onNavigateToReos = { targetUrl ->
+        }
+        MainAppTab.REOS_APPS -> {
+          if (activeSubApp == "weather") {
+            WeatherScreen(
+              onBack = { activeSubApp = null }
+            )
+          } else {
+            ReosAppsScreen(
+              onNavigateToWeather = { activeSubApp = "weather" },
+              onNavigateToReos = { targetUrl ->
+                val formatted = com.example.reos.ReosAccountManager.formatAppUrl(context, targetUrl)
+                reosBrowserUrlRequest = formatted
+                reosBrowserUrlTimestamp = System.currentTimeMillis()
+                currentTab = MainAppTab.REOS
+                activeSubApp = null
+              },
+              onNavigateToAddons = {
+                currentTab = MainAppTab.ADDONS
+                activeSubApp = null
+              }
+            )
+          }
+        }
+        MainAppTab.ADDONS -> {
+          AddonsScreen(
+            onNavigateToWeather = {
+              currentTab = MainAppTab.REOS_APPS
+              activeSubApp = "weather"
+            },
+            onNavigateToUrl = { targetUrl ->
               val formatted = com.example.reos.ReosAccountManager.formatAppUrl(context, targetUrl)
               reosBrowserUrlRequest = formatted
               reosBrowserUrlTimestamp = System.currentTimeMillis()
               currentTab = MainAppTab.REOS
               activeSubApp = null
-            },
-            onNavigateToAddons = {
-              currentTab = MainAppTab.ADDONS
-              activeSubApp = null
             }
           )
         }
-      }
-
-      // 3. Add-ons Tab
-      AnimatedVisibility(
-        visible = currentTab == MainAppTab.ADDONS,
-        enter = fadeIn(),
-        exit = fadeOut()
-      ) {
-        AddonsScreen(
-          onNavigateToWeather = {
-            currentTab = MainAppTab.REOS_APPS
-            activeSubApp = "weather"
-          },
-          onNavigateToUrl = { targetUrl ->
-            val formatted = com.example.reos.ReosAccountManager.formatAppUrl(context, targetUrl)
-            reosBrowserUrlRequest = formatted
-            reosBrowserUrlTimestamp = System.currentTimeMillis()
-            currentTab = MainAppTab.REOS
-            activeSubApp = null
-          }
-        )
       }
     }
     // 2. Ultra-Modern Flat Navigation Bar

@@ -62,6 +62,18 @@ const val CHAT_AI_WEB_URL = "https://reostech.pagekite.me/chat.html"
 const val DESKTOP_USER_AGENT =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 
+object ReosWebViewCache {
+  var webView: WebView? = null
+
+  fun clear() {
+    try {
+      webView?.stopLoading()
+      webView?.destroy()
+    } catch (_: Exception) {}
+    webView = null
+  }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReosScreen(
@@ -207,7 +219,13 @@ fun ReosScreen(
           .fillMaxSize()
           .testTag("reos_fullscreen_webview"),
         factory = { ctx ->
-          WebView(ctx).apply {
+          val cached = ReosWebViewCache.webView
+          if (cached != null) {
+            (cached.parent as? ViewGroup)?.removeView(cached)
+            webViewRef = cached
+            cached
+          } else {
+            WebView(ctx).apply {
             layoutParams = ViewGroup.LayoutParams(
               ViewGroup.LayoutParams.MATCH_PARENT,
               ViewGroup.LayoutParams.MATCH_PARENT
@@ -418,18 +436,16 @@ fun ReosScreen(
             }
 
             loadUrl(targetUrl)
+            ReosWebViewCache.webView = this
           }
-        },
+        }
+      },
         update = { view ->
           webViewRef = view
         },
         onRelease = { view ->
           try {
-            view.stopLoading()
-            view.loadUrl("about:blank")
-            view.clearHistory()
             (view.parent as? ViewGroup)?.removeView(view)
-            view.destroy()
           } catch (_: Exception) {}
         }
       )
