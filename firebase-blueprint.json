@@ -5,6 +5,11 @@
       "fields": {
         "displayName": { "type": "string" },
         "email": { "type": "string" },
+        "username": { "type": "string" },
+        "reosUsername": { "type": "string" },
+        "scratchpad": { "type": "string" },
+        "quickScratchpad": { "type": "string" },
+        "webCache": { "type": "map" },
         "createdAt": { "type": "timestamp" },
         "updatedAt": { "type": "timestamp" },
         "settings": { "type": "map" }

@@ -182,13 +182,30 @@
       Install directly on your Android phone, tablet, or test on any device.
     </p>
 
+    <!-- Ultra-Compressed Bundle Hero Card -->
+    <div style="background: linear-gradient(135deg, rgba(37, 99, 235, 0.2) 0%, rgba(16, 185, 129, 0.15) 100%); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 20px; padding: 22px; margin-bottom: 20px; text-align: left; display: flex; flex-direction: column; gap: 14px;">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div style="width: 48px; height: 48px; border-radius: 12px; background: rgba(59, 130, 246, 0.25); display: flex; align-items: center; justify-content: center; font-size: 24px;">🗜️</div>
+          <div>
+            <h3 style="font-size: 19px; font-weight: 800; margin-bottom: 2px;">Ultra-Compressed ZIP Bundle</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin: 0;">Contains both <strong>reosapp.apk</strong> and <strong>reosapp.aab</strong> packed with maximum level-9 deflation.</p>
+          </div>
+        </div>
+        <span class="size-tag" style="background: rgba(37, 99, 235, 0.3); border: 1px solid rgba(59, 130, 246, 0.5);">16 MB ZIP</span>
+      </div>
+      <a href="/reosapp-bundle.zip" class="btn btn-primary" download="reosapp-bundle.zip" style="font-size: 15px; padding: 14px 20px;">
+        <span>⬇️</span> Download All (APK + AAB ZIP Bundle)
+      </a>
+    </div>
+
     <div class="grid">
       <!-- APK Card -->
       <div class="card">
         <div>
           <div class="card-header">
             <div class="icon icon-apk">📱</div>
-            <span class="size-tag">26 MB</span>
+            <span class="size-tag">13 MB</span>
           </div>
           <h3>Android APK</h3>
           <p>Standard package for direct installation on phones, tablets, DeX, and emulators.</p>
@@ -203,7 +220,7 @@
         <div>
           <div class="card-header">
             <div class="icon icon-aab">📦</div>
-            <span class="size-tag">9.2 MB</span>
+            <span class="size-tag">9.3 MB</span>
           </div>
           <h3>Android App Bundle</h3>
           <p>Shrunk & obfuscated release bundle ready for Google Play upload or bundletool.</p>
@@ -217,10 +234,11 @@
     <div class="info-box">
       <strong>✨ Release Highlights:</strong>
       <ul>
-        <li><strong>R8 Minification:</strong> Reduced AAB size by 60% down to 9.2MB with dead-code removal.</li>
-        <li><strong>Zero-Lag Architecture:</strong> Instant tab switching without multi-screen overlay stutters.</li>
-        <li><strong>Optimized 3D Weather:</strong> Soft, natural illumination & 30fps GPU-throttled Three.js engine.</li>
-        <li><strong>Account Integration:</strong> Silent personalized <code>?user=username</code> parameter injection.</li>
+        <li><strong>Fixed Dock Geometry:</strong> Resolved vertical bar stretching with strict 56dp dock height and 44dp touch targets.</li>
+        <li><strong>Cross-Device Consistency:</strong> Dynamic color off by default for uniform theme across manufacturers; WebView textZoom locked to 100% to protect against system font zooming.</li>
+        <li><strong>Bidirectional Auto-Failover:</strong> Instant failover between <code>https://reostech.pagekite.me</code> and <code>https://reostech.web.app</code> with full path and user param retention.</li>
+        <li><strong>Ultra-Snappy 50ms Transitions:</strong> Instant 50ms screen cross-fades without multi-layer buffer stutters.</li>
+        <li><strong>Ultra-Compressed ZIP:</strong> Level-9 deflation combining APK & AAB into a single 16MB archive.</li>
       </ul>
     </div>
   </div>

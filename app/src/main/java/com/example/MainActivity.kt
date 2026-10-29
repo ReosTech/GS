@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -44,6 +45,26 @@ class MainActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     com.example.firebase.configureAppCheck(this, intent)
     enableEdgeToEdge()
+
+    // Maximize display refresh rate for 90Hz / 120Hz buttery smooth pacing
+    try {
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+        val wm = getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager
+        val activeDisplay = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+          display
+        } else {
+          wm.defaultDisplay
+        }
+        val modes = activeDisplay?.supportedModes
+        val highestMode = modes?.maxByOrNull { it.refreshRate }
+        if (highestMode != null && highestMode.refreshRate > 60f) {
+          val params = window.attributes
+          params.preferredDisplayModeId = highestMode.modeId
+          window.attributes = params
+        }
+      }
+    } catch (_: Exception) {}
+
     // Create notification channels for weather briefings and alerts
     NotificationHelper.createNotificationChannels(this)
     // Initialize Firebase services with google-services.json
@@ -95,74 +116,101 @@ fun MainAppContainer(
       .fillMaxSize()
       .background(MaterialTheme.colorScheme.background)
   ) {
-    // 1. Full-screen Content layer
+    // 1. Full-screen Content layer: Persist tabs in memory for instant 0ms, stutter-free 120Hz switching
     Box(
       modifier = Modifier
         .fillMaxSize()
-        .windowInsetsPadding(WindowInsets.statusBars)
+        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
     ) {
-      when (currentTab) {
-        MainAppTab.REOS -> {
-          ReosScreen(
-            initialUrl = com.example.reos.REOS_TAB_URL,
-            loadUrlRequest = reosBrowserUrlRequest,
-            urlRequestTimestamp = reosBrowserUrlTimestamp,
-            onNavigateToWeather = {
-              currentTab = MainAppTab.REOS_APPS
-              activeSubApp = "weather"
-            },
-            onNavigateToAddons = {
-              currentTab = MainAppTab.ADDONS
-              activeSubApp = null
-            },
-            isActiveTab = true
-          )
-        }
-        MainAppTab.REOS_APPS -> {
-          if (activeSubApp == "weather") {
-            WeatherScreen(
-              onBack = { activeSubApp = null }
-            )
-          } else {
-            ReosAppsScreen(
-              onNavigateToWeather = { activeSubApp = "weather" },
-              onNavigateToReos = { targetUrl ->
-                val formatted = com.example.reos.ReosAccountManager.formatAppUrl(context, targetUrl)
-                reosBrowserUrlRequest = formatted
-                reosBrowserUrlTimestamp = System.currentTimeMillis()
-                currentTab = MainAppTab.REOS
-                activeSubApp = null
-              },
-              onNavigateToAddons = {
-                currentTab = MainAppTab.ADDONS
-                activeSubApp = null
-              }
-            )
+      // Tab 0: Reos Browser & Web Portal
+      Box(
+        modifier = Modifier
+          .fillMaxSize()
+          .graphicsLayer {
+            val isActive = currentTab == MainAppTab.REOS
+            alpha = if (isActive) 1f else 0f
+            translationX = if (isActive) 0f else 25000f
           }
-        }
-        MainAppTab.ADDONS -> {
-          AddonsScreen(
-            onNavigateToWeather = {
-              currentTab = MainAppTab.REOS_APPS
-              activeSubApp = "weather"
-            },
-            onNavigateToUrl = { targetUrl ->
+      ) {
+        ReosScreen(
+          initialUrl = com.example.reos.REOS_TAB_URL,
+          loadUrlRequest = reosBrowserUrlRequest,
+          urlRequestTimestamp = reosBrowserUrlTimestamp,
+          onNavigateToWeather = {
+            currentTab = MainAppTab.REOS_APPS
+            activeSubApp = "weather"
+          },
+          onNavigateToAddons = {
+            currentTab = MainAppTab.ADDONS
+            activeSubApp = null
+          },
+          isActiveTab = (currentTab == MainAppTab.REOS)
+        )
+      }
+
+      // Tab 1: Reos Apps Hub & Weather Screen
+      Box(
+        modifier = Modifier
+          .fillMaxSize()
+          .graphicsLayer {
+            val isActive = currentTab == MainAppTab.REOS_APPS
+            alpha = if (isActive) 1f else 0f
+            translationX = if (isActive) 0f else 25000f
+          }
+      ) {
+        if (activeSubApp == "weather") {
+          WeatherScreen(
+            onBack = { activeSubApp = null }
+          )
+        } else {
+          ReosAppsScreen(
+            onNavigateToWeather = { activeSubApp = "weather" },
+            onNavigateToReos = { targetUrl ->
               val formatted = com.example.reos.ReosAccountManager.formatAppUrl(context, targetUrl)
               reosBrowserUrlRequest = formatted
               reosBrowserUrlTimestamp = System.currentTimeMillis()
               currentTab = MainAppTab.REOS
               activeSubApp = null
+            },
+            onNavigateToAddons = {
+              currentTab = MainAppTab.ADDONS
+              activeSubApp = null
             }
           )
         }
       }
+
+      // Tab 2: Add-ons & Cloud Preferences
+      Box(
+        modifier = Modifier
+          .fillMaxSize()
+          .graphicsLayer {
+            val isActive = currentTab == MainAppTab.ADDONS
+            alpha = if (isActive) 1f else 0f
+            translationX = if (isActive) 0f else 25000f
+          }
+      ) {
+        AddonsScreen(
+          onNavigateToWeather = {
+            currentTab = MainAppTab.REOS_APPS
+            activeSubApp = "weather"
+          },
+          onNavigateToUrl = { targetUrl ->
+            val formatted = com.example.reos.ReosAccountManager.formatAppUrl(context, targetUrl)
+            reosBrowserUrlRequest = formatted
+            reosBrowserUrlTimestamp = System.currentTimeMillis()
+            currentTab = MainAppTab.REOS
+            activeSubApp = null
+          }
+        )
+      }
     }
-    // 2. Ultra-Modern Flat Navigation Bar
+
+    // 2. Ultra-Modern Flat Bottom Navigation Bar pinned strictly at the bottom
     FlatModernNavigationBar(
       currentTab = currentTab,
       onTabSelected = { selectedTab ->
         if (selectedTab == MainAppTab.REOS_APPS && currentTab == MainAppTab.REOS_APPS && activeSubApp != null) {
-          // Tapping Reos Apps tab while inside a sub-app (like weather) navigates back to the Reos Apps hub
           activeSubApp = null
         } else {
           currentTab = selectedTab
@@ -170,7 +218,7 @@ fun MainAppContainer(
       },
       modifier = Modifier
         .align(Alignment.BottomCenter)
-        .windowInsetsPadding(WindowInsets.navigationBars)
+        .navigationBarsPadding()
     )
   }
 }
@@ -183,82 +231,83 @@ fun FlatModernNavigationBar(
 ) {
   val tabs = listOf(
     Triple(MainAppTab.REOS, "Reos", Icons.Default.Language),
-    Triple(MainAppTab.REOS_APPS, "Reos Apps", Icons.Default.Apps),
+    Triple(MainAppTab.REOS_APPS, "Apps", Icons.Default.Apps),
     Triple(MainAppTab.ADDONS, "Add-ons", Icons.Default.Extension)
   )
 
-  // Floating Flat Modern Dock Container with subtle frosted glass aesthetic
-  Surface(
+  // Floating dock pinned with responsive max-width on tablets and phones
+  Box(
     modifier = modifier
-      .wrapContentWidth()
-      .padding(horizontal = 16.dp, vertical = 12.dp)
-      .testTag("flat_modern_navigation"),
-    shape = RoundedCornerShape(24.dp),
-    color = Color(0xF20F172A), // Translucent frosted deep obsidian slate
-    border = BorderStroke(1.dp, Color(0x3394A3B8)), // Crisp modern frosted hairline border
-    tonalElevation = 0.dp,
-    shadowElevation = 6.dp
+      .fillMaxWidth()
+      .wrapContentHeight()
+      .padding(horizontal = 16.dp, vertical = 8.dp),
+    contentAlignment = Alignment.Center
   ) {
-    Row(
+    Surface(
       modifier = Modifier
-        .background(
-          Brush.verticalGradient(
-            colors = listOf(
-              Color(0x1AFFFFFF), // Subtle top frosted sheen
-              Color(0x00FFFFFF)
-            )
-          )
-        )
-        .padding(horizontal = 6.dp, vertical = 6.dp),
-      horizontalArrangement = Arrangement.spacedBy(6.dp),
-      verticalAlignment = Alignment.CenterVertically
+        .widthIn(max = 420.dp)
+        .fillMaxWidth()
+        .height(58.dp)
+        .testTag("flat_modern_navigation"),
+      shape = RoundedCornerShape(29.dp),
+      color = Color(0xF20F172A),
+      border = BorderStroke(1.dp, Color(0x3394A3B8)),
+      tonalElevation = 2.dp,
+      shadowElevation = 8.dp
     ) {
-      tabs.forEach { (tab, title, icon) ->
-        val isSelected = currentTab == tab
-        val pillBgColor by animateColorAsState(
-          targetValue = if (isSelected) Color(0xFF2563EB) else Color.Transparent,
-          label = "flat_tab_bg"
-        )
-        val contentColor by animateColorAsState(
-          targetValue = if (isSelected) Color.White else Color(0xFF94A3B8),
-          label = "flat_tab_content"
-        )
-        Surface(
-          shape = RoundedCornerShape(18.dp),
-          color = pillBgColor,
-          modifier = Modifier
-            .height(44.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .clickable(
-              interactionSource = remember { MutableInteractionSource() },
-              indication = null
-            ) { onTabSelected(tab) }
-            .testTag("nav_tab_${tab.name.lowercase()}")
-        ) {
-          Row(
+      Row(
+        modifier = Modifier
+          .fillMaxSize()
+          .padding(horizontal = 6.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        tabs.forEach { (tab, title, icon) ->
+          val isSelected = currentTab == tab
+          val pillBgColor by animateColorAsState(
+            targetValue = if (isSelected) Color(0xFF2563EB) else Color.Transparent,
+            animationSpec = tween(durationMillis = 100, easing = FastOutSlowInEasing),
+            label = "flat_tab_bg"
+          )
+          val contentColor by animateColorAsState(
+            targetValue = if (isSelected) Color.White else Color(0xFF94A3B8),
+            animationSpec = tween(durationMillis = 100, easing = FastOutSlowInEasing),
+            label = "flat_tab_content"
+          )
+          Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = pillBgColor,
             modifier = Modifier
-              .padding(horizontal = if (isSelected) 18.dp else 14.dp)
-              .fillMaxHeight(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+              .weight(1f)
+              .height(44.dp)
+              .clip(RoundedCornerShape(20.dp))
+              .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(color = Color.White.copy(alpha = 0.25f))
+              ) { onTabSelected(tab) }
+              .testTag("nav_tab_${tab.name.lowercase()}")
           ) {
-            Icon(
-              imageVector = icon,
-              contentDescription = title,
-              tint = contentColor,
-              modifier = Modifier.size(19.dp)
-            )
-            AnimatedVisibility(
-              visible = isSelected,
-              enter = expandHorizontally() + fadeIn(),
-              exit = shrinkHorizontally() + fadeOut()
+            Row(
+              modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 6.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.Center
             ) {
+              Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = contentColor,
+                modifier = Modifier.size(19.dp)
+              )
+              Spacer(Modifier.width(6.dp))
               Text(
                 text = title,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontSize = 12.sp,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                 color = contentColor,
-                maxLines = 1
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
               )
             }
           }

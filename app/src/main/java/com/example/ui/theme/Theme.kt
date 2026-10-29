@@ -52,7 +52,7 @@ private object NoIndication : androidx.compose.foundation.IndicationNodeFactory 
 @Composable
 fun ReosTechTheme(
   darkTheme: Boolean = isSystemInDarkTheme(),
-  dynamicColor: Boolean = true,
+  dynamicColor: Boolean = false, // Disabled by default for 100% visual consistency across all devices & OEMs
   content: @Composable () -> Unit,
 ) {
   val colorScheme =
@@ -77,6 +77,6 @@ fun ReosTechTheme(
 @Composable
 fun MyApplicationTheme(
   darkTheme: Boolean = isSystemInDarkTheme(),
-  dynamicColor: Boolean = true,
+  dynamicColor: Boolean = false,
   content: @Composable () -> Unit,
 ) = ReosTechTheme(darkTheme = darkTheme, dynamicColor = dynamicColor, content = content)

@@ -47,7 +47,7 @@
       powerPreference: "low-power"
     });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(1.0);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1.0, 2.0));
     renderer.setClearColor(0x000000, 0);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.85;
@@ -564,7 +564,6 @@
     };
 
     let lastFrameTime = performance.now();
-    const frameInterval = 1000 / 30; // 30 FPS limit
     let simTime = 0;
     let nextLightning = 4.0;
 
@@ -572,11 +571,11 @@
       requestAnimationFrame(animate);
       if (isPaused) return;
 
-      const elapsed = currentTime - lastFrameTime;
-      if (elapsed < frameInterval) return;
-      lastFrameTime = currentTime - (elapsed % frameInterval);
+      const elapsedMs = currentTime - lastFrameTime;
+      if (elapsedMs < 8) return;
+      lastFrameTime = currentTime;
 
-      const delta = 0.033; // Fixed 30fps delta
+      const delta = Math.min(elapsedMs / 1000, 0.04);
       simTime += delta;
 
       // Smooth Spring Parallax

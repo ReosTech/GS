@@ -50,7 +50,7 @@ fun ReosAppsScreen(
   var searchQuery by remember { mutableStateOf("") }
   var selectedCategory by remember { mutableStateOf("All") }
   var quickNotesModalOpen by remember { mutableStateOf(false) }
-  var quickNoteText by remember { mutableStateOf("") }
+  var quickNoteText by remember { mutableStateOf(com.example.firebase.FirebaseManager.getScratchpad(context)) }
   var savedNoteStatus by remember { mutableStateOf<String?>(null) }
 
   // Reos Account State
@@ -58,6 +58,14 @@ fun ReosAppsScreen(
 
   DisposableEffect(Unit) {
     loggedInUser = ReosAccountManager.getLoggedInUsername(context)
+    val localNote = com.example.firebase.FirebaseManager.getScratchpad(context)
+    if (localNote.isNotBlank()) {
+      quickNoteText = localNote
+    }
+    com.example.firebase.FirebaseManager.fetchRemoteUserData(context) { remoteUser, remoteNote ->
+      if (!remoteUser.isNullOrBlank()) loggedInUser = remoteUser
+      if (!remoteNote.isNullOrBlank() && quickNoteText.isBlank()) quickNoteText = remoteNote
+    }
     onDispose { }
   }
 
@@ -303,6 +311,7 @@ fun ReosAppsScreen(
       items(
         items = filteredApps,
         key = { it.id },
+        contentType = { "app_tile" },
         span = { GridItemSpan(1) }
       ) { appItem ->
         StandardAppTile(
@@ -363,14 +372,20 @@ fun ReosAppsScreen(
         confirmButton = {
           Button(
             onClick = {
-              savedNoteStatus = "Note saved to active session!"
+              com.example.firebase.FirebaseManager.saveScratchpad(context, quickNoteText)
+              savedNoteStatus = "Note saved"
             }
           ) {
             Text("Save")
           }
         },
         dismissButton = {
-          TextButton(onClick = { quickNotesModalOpen = false }) {
+          TextButton(onClick = {
+            if (quickNoteText != com.example.firebase.FirebaseManager.getScratchpad(context)) {
+              com.example.firebase.FirebaseManager.saveScratchpad(context, quickNoteText)
+            }
+            quickNotesModalOpen = false
+          }) {
             Text("Close")
           }
         }
@@ -388,6 +403,8 @@ fun StandardAppTile(
   onClick: () -> Unit,
   modifier: Modifier = Modifier
 ) {
+  val gradientBrush = remember(item.gradientColors) { Brush.linearGradient(item.gradientColors) }
+
   Card(
     modifier = modifier
       .fillMaxWidth()
@@ -398,7 +415,7 @@ fun StandardAppTile(
     shape = RoundedCornerShape(20.dp),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
-    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp, pressedElevation = 6.dp)
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp, pressedElevation = 1.dp)
   ) {
     Column(
       modifier = Modifier
@@ -417,7 +434,7 @@ fun StandardAppTile(
             modifier = Modifier
               .size(42.dp)
               .background(
-                Brush.linearGradient(item.gradientColors),
+                gradientBrush,
                 RoundedCornerShape(14.dp)
               ),
             contentAlignment = Alignment.Center

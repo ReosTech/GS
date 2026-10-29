@@ -1357,7 +1357,7 @@ fun SmoothWeather3DView(
             ViewGroup.LayoutParams.MATCH_PARENT
           )
           setBackgroundColor(0x00000000)
-          setLayerType(View.LAYER_TYPE_NONE, null)
+          setLayerType(View.LAYER_TYPE_HARDWARE, null)
           if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
           }
@@ -1368,6 +1368,7 @@ fun SmoothWeather3DView(
             allowContentAccess = true
             useWideViewPort = true
             loadWithOverviewMode = true
+            textZoom = 100
             cacheMode = WebSettings.LOAD_DEFAULT
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
               safeBrowsingEnabled = false

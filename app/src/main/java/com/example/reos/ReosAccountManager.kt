@@ -15,7 +15,30 @@ object ReosAccountManager {
   private const val KEY_LOGGED_IN = "is_logged_in"
   private const val KEY_USERNAME = "logged_username"
   private const val KEY_PICTURE = "logged_picture"
-  const val USERS_JSON_URL = "https://reostech.pagekite.me/users.json"
+  const val USERS_JSON_PAGEKITE = "https://reostech.pagekite.me/users.json"
+  const val USERS_JSON_FIREBASE = "https://reostech.web.app/users.json"
+
+  // Render endpoint for users.json verification when the web app is on https://reostech.web.app
+  // Dynamically configurable when custom Render URL is provided
+  @Volatile
+  var RENDER_USERS_URL: String = "https://reostech.onrender.com/users.json"
+
+  // Tracking the active URL on Reos Screen to dynamically adapt verification endpoint
+  @Volatile
+  var activeWebScreenUrl: String = "https://reostech.pagekite.me"
+
+  fun setCustomRenderUrl(rawUrl: String) {
+    val clean = rawUrl.trim()
+    RENDER_USERS_URL = if (clean.endsWith("/users.json")) {
+      clean
+    } else {
+      clean.trimEnd('/') + "/users.json"
+    }
+  }
+
+  fun isWebScreenOnWebApp(): Boolean {
+    return activeWebScreenUrl.contains("reostech.web.app", ignoreCase = true)
+  }
 
   fun isLoggedIn(context: Context): Boolean {
     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -39,11 +62,13 @@ object ReosAccountManager {
       .putString(KEY_USERNAME, username)
       .putString(KEY_PICTURE, picture)
       .apply()
+    com.example.firebase.FirebaseManager.triggerSilentSync(context, username = username)
   }
 
   fun signOut(context: Context) {
     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     prefs.edit().clear().apply()
+    com.example.firebase.FirebaseManager.triggerSilentSync(context, username = "")
   }
 
   /**
@@ -110,21 +135,44 @@ object ReosAccountManager {
           return@withContext Result.failure(IllegalArgumentException("Please enter your password."))
         }
 
-        val url = URL(USERS_JSON_URL)
-        connection = (url.openConnection() as HttpURLConnection).apply {
-          requestMethod = "GET"
-          connectTimeout = 8000
-          readTimeout = 8000
-          setRequestProperty("Accept", "application/json")
-          setRequestProperty("User-Agent", "ReosAndroidApp/2.0")
+        // When the URL in Reos screen is https://reostech.web.app, verify against Render
+        val urlsToTry = if (isWebScreenOnWebApp()) {
+          listOf(RENDER_USERS_URL, USERS_JSON_PAGEKITE, USERS_JSON_FIREBASE)
+        } else {
+          listOf(USERS_JSON_PAGEKITE, RENDER_USERS_URL, USERS_JSON_FIREBASE)
+        }
+        var responseText: String? = null
+        var lastErr: Exception? = null
+
+        for (endpoint in urlsToTry) {
+          try {
+            val url = URL(endpoint)
+            connection = (url.openConnection() as HttpURLConnection).apply {
+              requestMethod = "GET"
+              connectTimeout = 6000
+              readTimeout = 6000
+              setRequestProperty("Accept", "application/json")
+              setRequestProperty("User-Agent", "ReosAndroidApp/2.0")
+            }
+            val responseCode = connection.responseCode
+            if (responseCode in 200..299) {
+              responseText = connection.inputStream.bufferedReader().use(BufferedReader::readText)
+              break
+            } else {
+              lastErr = Exception("Server returned HTTP $responseCode")
+            }
+          } catch (e: Exception) {
+            lastErr = e
+          } finally {
+            try { connection?.disconnect() } catch (_: Exception) {}
+            connection = null
+          }
         }
 
-        val responseCode = connection.responseCode
-        if (responseCode !in 200..299) {
-          return@withContext Result.failure(Exception("Unable to reach authentication server (HTTP $responseCode)."))
+        if (responseText == null) {
+          return@withContext Result.failure(Exception("Unable to reach authentication server: ${lastErr?.message}"))
         }
 
-        val responseText = connection.inputStream.bufferedReader().use(BufferedReader::readText)
         val jsonObject = try {
           JSONObject(responseText)
         } catch (e: Exception) {

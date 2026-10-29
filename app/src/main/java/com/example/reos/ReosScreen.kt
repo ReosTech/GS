@@ -51,9 +51,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 
+const val PRIMARY_WEB_URL = "https://reostech.pagekite.me"
+const val SECONDARY_WEB_URL = "https://reostech.web.app"
 const val DEFAULT_WEB_URL = "https://reostech.pagekite.me"
 const val REOS_TAB_URL = "https://reostech.pagekite.me"
-const val FALLBACK_WEB_URL = "https://reostech.pagekite.me"
+const val FALLBACK_WEB_URL = "https://reostech.web.app"
 const val SEARCH_WEB_URL = "https://reostech.pagekite.me/search.html"
 const val EMAIL_WEB_URL = "https://reostech.pagekite.me/emails.html"
 const val FORM_BUILDER_WEB_URL = "https://reostech.pagekite.me/form_builder.html"
@@ -61,6 +63,26 @@ const val FORM_RESPONSES_WEB_URL = "https://reostech.pagekite.me/responses.html"
 const val CHAT_AI_WEB_URL = "https://reostech.pagekite.me/chat.html"
 const val DESKTOP_USER_AGENT =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+
+/**
+ * Bidirectional domain switcher:
+ * If on reostech.pagekite.me (or any typo/mirror like reostechagekite.me), switches to reostech.web.app.
+ * If on reostech.web.app, switches to reostech.pagekite.me.
+ * Preserves subpaths, queries (?user=username), and fragments.
+ */
+fun switchDomain(url: String): String {
+  return when {
+    url.contains("reostech.web.app") -> {
+      url.replace("reostech.web.app", "reostech.pagekite.me")
+    }
+    url.contains("reostechagekite.me") || url.contains("pgekite.me") || url.contains("reostech.pagekite.me") -> {
+      url.replace("reostech.pagekite.me", "reostech.web.app")
+        .replace("reostechagekite.me", "reostech.web.app")
+        .replace("reostech.pgekite.me", "reostech.web.app")
+    }
+    else -> SECONDARY_WEB_URL
+  }
+}
 
 object ReosWebViewCache {
   var webView: WebView? = null
@@ -223,6 +245,7 @@ fun ReosScreen(
           if (cached != null) {
             (cached.parent as? ViewGroup)?.removeView(cached)
             webViewRef = cached
+            try { cached.onResume() } catch (_: Exception) {}
             cached
           } else {
             WebView(ctx).apply {
@@ -230,8 +253,8 @@ fun ReosScreen(
               ViewGroup.LayoutParams.MATCH_PARENT,
               ViewGroup.LayoutParams.MATCH_PARENT
             )
-            // Standard hardware compositing layer; avoid forcing LAYER_TYPE_SOFTWARE which breaks Chromium sandbox
-            setLayerType(View.LAYER_TYPE_NONE, null)
+            // Hardware accelerated GPU compositing layer for ultra-smooth 60/120fps scrolling
+            setLayerType(View.LAYER_TYPE_HARDWARE, null)
             webViewRef = this
             setupWebSettings(this, isDesktopMode)
             webViewClient = object : WebViewClient() {
@@ -268,7 +291,10 @@ fun ReosScreen(
                 isLoading = true
                 isWebError = false
                 pageStartTime = SystemClock.elapsedRealtime()
-                url?.let { currentLoadedUrl = it }
+                url?.let {
+                  currentLoadedUrl = it
+                  ReosAccountManager.activeWebScreenUrl = it
+                }
               }
 
               override fun onPageFinished(view: WebView?, url: String?) {
@@ -278,6 +304,10 @@ fun ReosScreen(
                 canGoBack = view?.canGoBack() == true
                 canGoForward = view?.canGoForward() == true
                 view?.title?.let { pageTitle = it }
+                url?.let {
+                  currentLoadedUrl = it
+                  ReosAccountManager.activeWebScreenUrl = it
+                }
                 lastLoadDurationMs = SystemClock.elapsedRealtime() - pageStartTime
                 // Ensure responsive mobile viewport on loaded page
                 view?.evaluateJavascript(
@@ -294,6 +324,16 @@ fun ReosScreen(
                   """.trimIndent(),
                   null
                 )
+                url?.let { loadedUrl ->
+                  val titleStr = view?.title.orEmpty()
+                  val cacheData = mapOf(
+                    "lastLoadedUrl" to loadedUrl,
+                    "pageTitle" to titleStr,
+                    "lastVisitedAt" to System.currentTimeMillis(),
+                    "loadDurationMs" to lastLoadDurationMs
+                  )
+                  com.example.firebase.FirebaseManager.saveWebCache(context, cacheData)
+                }
               }
 
               @SuppressLint("WebViewClientOnReceivedSslError")
@@ -314,12 +354,13 @@ fun ReosScreen(
                 super.onReceivedError(view, request, error)
                 if (request?.isForMainFrame == true) {
                   val failingUrl = request.url?.toString().orEmpty()
-                  if (targetUrl != FALLBACK_WEB_URL) {
-                    android.util.Log.w("ReosScreen", "URL ($failingUrl) failed. Failing over to $FALLBACK_WEB_URL")
-                    targetUrl = FALLBACK_WEB_URL
-                    currentLoadedUrl = FALLBACK_WEB_URL
+                  val switchedUrl = switchDomain(if (failingUrl.isNotBlank()) failingUrl else currentLoadedUrl)
+                  if (switchedUrl != currentLoadedUrl) {
+                    android.util.Log.w("ReosScreen", "URL ($failingUrl) error. Instantly switching host to $switchedUrl")
+                    targetUrl = switchedUrl
+                    currentLoadedUrl = switchedUrl
                     isWebError = false
-                    view?.loadUrl(FALLBACK_WEB_URL)
+                    view?.loadUrl(switchedUrl)
                     return
                   }
                   isLoading = false
@@ -337,12 +378,15 @@ fun ReosScreen(
                 if (request?.isForMainFrame == true) {
                   val failingUrl = request.url?.toString().orEmpty()
                   val statusCode = errorResponse?.statusCode ?: 200
-                  if (statusCode >= 400 && targetUrl != FALLBACK_WEB_URL) {
-                    android.util.Log.w("ReosScreen", "URL ($failingUrl) returned HTTP $statusCode. Failing over to $FALLBACK_WEB_URL")
-                    targetUrl = FALLBACK_WEB_URL
-                    currentLoadedUrl = FALLBACK_WEB_URL
-                    isWebError = false
-                    view?.loadUrl(FALLBACK_WEB_URL)
+                  if (statusCode >= 400) {
+                    val switchedUrl = switchDomain(if (failingUrl.isNotBlank()) failingUrl else currentLoadedUrl)
+                    if (switchedUrl != currentLoadedUrl) {
+                      android.util.Log.w("ReosScreen", "URL ($failingUrl) returned HTTP $statusCode. Instantly switching host to $switchedUrl")
+                      targetUrl = switchedUrl
+                      currentLoadedUrl = switchedUrl
+                      isWebError = false
+                      view?.loadUrl(switchedUrl)
+                    }
                   }
                 }
               }
@@ -366,8 +410,9 @@ fun ReosScreen(
                 webViewRef = null
                 if (renderCrashCount < 2) {
                   renderCrashCount++
-                  targetUrl = FALLBACK_WEB_URL
-                  currentLoadedUrl = FALLBACK_WEB_URL
+                  val switchedUrl = switchDomain(currentLoadedUrl)
+                  targetUrl = switchedUrl
+                  currentLoadedUrl = switchedUrl
                   webViewInstanceKey++
                 } else {
                   isLoading = false
@@ -397,13 +442,20 @@ fun ReosScreen(
                   clean.contains("Access denied", ignoreCase = true) ||
                   clean.contains("Attention Required", ignoreCase = true) ||
                   clean.contains("403 Forbidden", ignoreCase = true) ||
-                  clean.contains("Cloudflare", ignoreCase = true)
-                if (isChallengeOrError && targetUrl != FALLBACK_WEB_URL) {
-                  android.util.Log.w("ReosScreen", "Title indicated challenge/block ('$clean'). Auto failing over to $FALLBACK_WEB_URL")
-                  targetUrl = FALLBACK_WEB_URL
-                  currentLoadedUrl = FALLBACK_WEB_URL
-                  isWebError = false
-                  view?.loadUrl(FALLBACK_WEB_URL)
+                  clean.contains("Cloudflare", ignoreCase = true) ||
+                  clean.contains("502 Bad Gateway", ignoreCase = true) ||
+                  clean.contains("503 Service", ignoreCase = true) ||
+                  clean.contains("Tunnel Unavailable", ignoreCase = true) ||
+                  clean.contains("Error 404", ignoreCase = true)
+                if (isChallengeOrError) {
+                  val switchedUrl = switchDomain(currentLoadedUrl)
+                  if (switchedUrl != currentLoadedUrl) {
+                    android.util.Log.w("ReosScreen", "Title indicated challenge/block ('$clean'). Instantly switching host to $switchedUrl")
+                    targetUrl = switchedUrl
+                    currentLoadedUrl = switchedUrl
+                    isWebError = false
+                    view?.loadUrl(switchedUrl)
+                  }
                 }
               }
 
@@ -445,6 +497,7 @@ fun ReosScreen(
         },
         onRelease = { view ->
           try {
+            view.onPause()
             (view.parent as? ViewGroup)?.removeView(view)
           } catch (_: Exception) {}
         }
@@ -965,20 +1018,30 @@ fun ReosScreen(
 
 @SuppressLint("SetJavaScriptEnabled")
 fun setupWebSettings(webView: WebView, isDesktop: Boolean) {
-  webView.setLayerType(View.LAYER_TYPE_NONE, null)
+  // Use hardware-accelerated layer for silky 60/120fps scrolling
+  webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+  webView.isVerticalScrollBarEnabled = false
+  webView.isHorizontalScrollBarEnabled = false
+  webView.isNestedScrollingEnabled = true
+  webView.overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+
   if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
     webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
   }
   webView.settings.apply {
     javaScriptEnabled = true
     domStorageEnabled = true
+    databaseEnabled = true
     allowFileAccess = true
     allowContentAccess = true
     useWideViewPort = true
     loadWithOverviewMode = true
-    builtInZoomControls = true
+    textZoom = 100 // Enforces identical web font metrics across all devices regardless of system font scale
+    builtInZoomControls = false
     displayZoomControls = false
     setSupportZoom(true)
+    loadsImagesAutomatically = true
+    setNeedInitialFocus(false)
     cacheMode = WebSettings.LOAD_DEFAULT
     mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
     userAgentString = if (isDesktop) DESKTOP_USER_AGENT else null

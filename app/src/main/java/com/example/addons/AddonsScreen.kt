@@ -948,6 +948,31 @@ fun ReosAccountAddonCard(
       } else {
         // --- LOGIN FORM STATE ---
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          val isWebScreenOnFirebase = ReosAccountManager.isWebScreenOnWebApp()
+          Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = if (isWebScreenOnFirebase) Color(0x1A2563EB) else Color(0x1A059669),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              Box(
+                modifier = Modifier
+                  .size(6.dp)
+                  .background(if (isWebScreenOnFirebase) Color(0xFF2563EB) else Color(0xFF059669), CircleShape)
+              )
+              Text(
+                text = if (isWebScreenOnFirebase) "Verification: Render (reostech.web.app active)" else "Verification: Pagekite",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = if (isWebScreenOnFirebase) Color(0xFF2563EB) else Color(0xFF059669)
+              )
+            }
+          }
+
           Text(
             text = "Enter your Reos username and password. Upon verification, your account is linked across all applications.",
             fontSize = 12.sp,
